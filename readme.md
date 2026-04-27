@@ -1,6 +1,8 @@
 in progress:
 
-- display for when theres no books
+- book card view when no cover photo
+- remove space when no desc
+- spacing between rows of the cards
 
 todo:
 
@@ -11,25 +13,22 @@ todo:
   - filters
 
 - new book modal
+  - keyboard avoidance
 
 - cookbook list page:
 
 - recipe list page:
   - search
-  - dont show time if null
+  - view for no recipes
 
 - create recipe modal:
   - return on desc should close keyboard
 
 - recipe overvire page:
   - photo taking time to load
-
-questions for mena:
-
-- flow for creating a new book
-  - steps / ingredients
-- graphics for when theres no books / no recipes
-- what happens when you press the icons on the recipe card
-- profile / settings page
-- the other tabs
-- placeholder for missing images?
+  - view for no comments
+  - make comment appear after creation
+  - view for when there is no story
+  - delete functionality
+  - clone functionality
+  - edit functionality
