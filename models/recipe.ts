@@ -1,7 +1,4 @@
-export interface Recipe {
-  id: number;
-  created_at: string;
-  owner_id: string;
+export interface RecipeRequest {
   book_id: number;
   title: string;
   description?: string;
@@ -10,4 +7,14 @@ export interface Recipe {
   servings?: number;
   ingredients?: string[];
   steps?: string[];
+  image_url: string;
+}
+
+export interface Recipe extends RecipeRequest {
+  id: number;
+  created_at: string;
+  owner_id: string;
+  owner: any;
+  book: any;
+  comments: any[];
 }

@@ -1,168 +1,106 @@
+import BookCard from "@/components/BookCard";
+import Divider from "@/components/Divider";
+import LoadingOverlay from "@/components/LoadingOverlay";
+import ScrollPage from "@/components/ScrollPage";
+import Title from "@/components/Title";
 import { theme } from "@/constants/theme";
-import { Book } from "@/models/book";
+import { useAuth } from "@/contexts/AuthContext";
 import { getBooks } from "@/services/books";
-import { Session } from "@supabase/supabase-js";
-import { Asset } from "expo-asset";
-import { Image } from "expo-image";
+import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  Dimensions,
-  ImageBackground,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { Book } from "lucide-react-native";
+import React from "react";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
-const screenWidth = Dimensions.get("window").width;
-
-export default function CookbookShelf({ session }: { session: Session }) {
-  const [activeFilter, setActiveFilter] = useState(0);
+export default function CookbookShelf() {
   const router = useRouter();
-  const [books, setBooks] = useState<Book[]>([]);
-  const [loading, setLoading] = useState(true);
 
   const image = require("../../../assets/images/pattern1.png");
+  const { session } = useAuth();
+  const userId = session?.user?.id;
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  const { data: books = [], isLoading } = useQuery({
+    queryKey: ["books"],
+    queryFn: () => getBooks(userId),
+    staleTime: 1000 * 60 * 10,
+  });
 
-  const loadData = async () => {
-    // Load assets first
-    await Asset.loadAsync([image]);
-
-    // Load books from API
-    const { data, error } = await getBooks();
-    if (error) {
-      console.log(error);
-      setLoading(false);
-      return;
-    }
-
-    setBooks(data);
-    setLoading(false);
-  };
-
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={theme.colors.darkRed} />
-      </View>
-    );
+  if (isLoading) {
+    return <LoadingOverlay visible={true} mode="full" />;
   }
 
   return (
-    <View style={styles.container}>
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* header */}
-        <Text style={styles.title}>Cookbook Shelf</Text>
+    <ScrollPage>
+      {/* title */}
+      <Title
+        title="Bookshelf"
+        buttonTitle="Add book"
+        buttonPress={() =>
+          router.push({
+            pathname: "/(tabs)/home/newBook",
+          })
+        }
+      />
 
-        {/* filters */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingRight: 6 }}
-        >
-          {["All", "Created by you", "Created by others", "Imported"].map(
-            (label, index) => (
-              <TouchableOpacity
-                key={index}
-                style={[
-                  styles.filterButton,
-                  {
-                    backgroundColor:
-                      activeFilter === index
-                        ? theme.colors.yellow
-                        : theme.colors.grey,
-                  },
-                ]}
-                onPress={() => setActiveFilter(index)}
-              >
-                <Text style={styles.filterButtonText}>{label}</Text>
-              </TouchableOpacity>
-            ),
-          )}
-        </ScrollView>
+      {/* sub-title */}
+      <Text style={theme.edgeMargin}>
+        Curated collections of family recipes
+      </Text>
 
-        {/* books */}
-        {books.map((cookbook, index) => {
-          if (index % 2 !== 0) return null;
-          const firstBook = books[index];
-          const secondBook = books[index + 1];
+      <View style={{ width: "100%", alignItems: "center" }}>
+        <Divider />
+      </View>
 
-          return (
-            <View key={index}>
-              <Image
-                source={require("../../../assets/images/divider.svg")}
-                style={styles.divider}
-                contentFit="contain"
-              />
+      {books.length === 0 && (
+        <View style={styles.noBookContainer}>
+          <View style={styles.noBookCircle}>
+            <Book size={32} />
+          </View>
+          <Text
+            style={{
+              fontFamily: theme.typography.fonts.regular,
+              fontSize: theme.typography.sizes.xl,
+            }}
+          >
+            No cookbooks yet
+          </Text>
+          <Text style={{ color: "grey", marginHorizontal: 12 }}>
+            Start building your collection of family recipes
+          </Text>
+          <TouchableOpacity
+            style={styles.addBookBtn}
+            onPress={() =>
+              router.push({
+                pathname: "/(tabs)/home/newBook",
+              })
+            }
+          >
+            <Text style={{ fontWeight: "bold" }}>Add your first cookbook</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
-              <View style={styles.bookList}>
-                <Pressable
-                  style={styles.cookbookCard}
-                  onPress={() =>
-                    router.push({
-                      pathname: "/(tabs)/home/cookBook",
-                      params: { book: JSON.stringify(firstBook) },
-                    })
-                  }
-                >
-                  <ImageBackground
-                    source={image}
-                    style={styles.cookbookCardBackground}
-                    imageStyle={styles.cookbookCardImage}
-                  >
-                    <View style={styles.cookbookCardTitleContainerOuter}>
-                      <Text style={styles.cookbookTitle}>
-                        {firstBook.title}
-                      </Text>
-                    </View>
-                  </ImageBackground>
-                </Pressable>
-                {secondBook && (
-                  <Pressable
-                    style={styles.cookbookCard}
-                    onPress={() =>
-                      router.push({
-                        pathname: "/(tabs)/home/cookBook",
-                        params: { book: JSON.stringify(secondBook) },
-                      })
-                    }
-                  >
-                    <ImageBackground
-                      source={image}
-                      style={styles.cookbookCardBackground}
-                      imageStyle={styles.cookbookCardImage}
-                    >
-                      <View style={styles.cookbookCardTitleContainerOuter}>
-                        <Text style={styles.cookbookTitle}>
-                          {secondBook.title}
-                        </Text>
-                      </View>
-                    </ImageBackground>
-                  </Pressable>
-                )}
-              </View>
+      {/* books */}
+      {books.map((_, index) => {
+        if (index % 2 !== 0) return null;
+        const firstBook = books[index];
+        const secondBook = books[index + 1];
+
+        return (
+          <View style={{ marginHorizontal: 12 }} key={index}>
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              <BookCard book={firstBook} />
+              {secondBook && <BookCard book={secondBook} />}
             </View>
-          );
-        })}
-      </ScrollView>
-    </View>
+          </View>
+        );
+      })}
+    </ScrollPage>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.colors.beige },
+  container: { flex: 1, backgroundColor: "white" },
   content: { paddingBottom: 12 },
   loadingContainer: {
     flex: 1,
@@ -170,53 +108,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: theme.colors.beige,
   },
-  title: {
-    fontFamily: theme.typography.fonts.regular,
-    fontSize: theme.typography.sizes.xxl,
-    margin: 12,
-    marginBottom: 6,
+  noBookContainer: {
+    gap: 8,
+    width: "100%",
+    alignItems: "center",
   },
-  filterButton: {
+  noBookCircle: {
     backgroundColor: theme.colors.grey,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    borderRadius: theme.borderRadius.md,
-    alignSelf: "flex-start",
-    marginLeft: 6,
+    padding: 16,
+    borderRadius: 999,
+    marginBottom: 8,
   },
-  filterButtonText: {
-    fontSize: theme.typography.sizes.md,
-    color: theme.colors.darkRed,
-  },
-  divider: {
-    width: screenWidth - 24,
-    height: 5,
-    margin: 12,
-  },
-  bookList: { flexDirection: "row" },
-  cookbookCardBackground: {
-    display: "flex",
-    height: 200,
-    width: (screenWidth - 36) / 2,
-    marginLeft: 12,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-  },
-  cookbookCardImage: { borderRadius: theme.borderRadius.md },
-  cookbookCardTitleContainerOuter: {
-    display: "flex",
-    backgroundColor: theme.colors.beige,
-    padding: 4,
-    borderRadius: theme.borderRadius.sm,
-  },
-  cookbookTitle: {
-    fontFamily: theme.typography.fonts.bold,
-    lineHeight: 20,
-    fontSize: theme.typography.sizes.md,
-    borderWidth: 1,
-    padding: 8,
-    borderRadius: theme.borderRadius.sm,
-    borderColor: theme.colors.text.secondary,
-    textAlign: "center",
+  addBookBtn: {
+    backgroundColor: theme.colors.grey,
+    padding: 16,
+    borderRadius: 8,
+    marginTop: 16,
   },
 });

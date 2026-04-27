@@ -1,5 +1,9 @@
 // constants/theme.ts
 
+import { Dimensions } from "react-native";
+
+const screenWidth = Dimensions.get("window").width;
+
 export const colors = {
   yellow: "#EFB04B",
   red: "#B5381D",
@@ -98,6 +102,34 @@ export const shadows = {
   },
 };
 
+const title = {
+  fontFamily: typography.fonts.regular,
+  fontSize: typography.sizes.xxl,
+  marginBottom: 0,
+};
+
+const card = {
+  height: 180,
+  width: (screenWidth - 36) / 2,
+  borderRadius: borderRadius.md,
+  borderWidth: 1,
+  borderColor: colors.grey,
+  overflow: "hidden",
+};
+
+const cardTitle = {
+  fontSize: typography.sizes.md,
+};
+
+const cardSubtitle = {
+  fontSize: typography.sizes.xs,
+  color: colors.text.secondary,
+};
+
+const edgeMargin = {
+  marginHorizontal: 12,
+};
+
 // Combine everything into one theme object
 export const theme = {
   colors,
@@ -105,6 +137,11 @@ export const theme = {
   spacing,
   borderRadius,
   shadows,
+  title,
+  card,
+  cardTitle,
+  cardSubtitle,
+  edgeMargin,
 };
 
 export type Theme = typeof theme;

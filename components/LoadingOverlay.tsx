@@ -1,10 +1,10 @@
-import { theme } from "@/constants/theme";
 import { Image } from "expo-image";
 import React, { useEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
 
 interface Props {
   visible: boolean;
+  mode: string;
 }
 
 // Add your image paths here
@@ -14,7 +14,7 @@ const LOADING_IMAGES = [
   require("@/assets/images/loading3.svg"),
 ];
 
-const LoadingOverlay = ({ visible }: Props) => {
+const LoadingOverlay = ({ visible, mode }: Props) => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   useEffect(() => {
@@ -22,7 +22,7 @@ const LoadingOverlay = ({ visible }: Props) => {
 
     const interval = setInterval(() => {
       setCurrentImageIndex(
-        (prevIndex) => (prevIndex + 1) % LOADING_IMAGES.length
+        (prevIndex) => (prevIndex + 1) % LOADING_IMAGES.length,
       );
     }, 250); // Change image every 0.5 seconds
 
@@ -32,7 +32,7 @@ const LoadingOverlay = ({ visible }: Props) => {
   if (!visible) return null;
 
   return (
-    <View style={styles.overlay}>
+    <View style={mode === "modal" ? styles.overlay : styles.full}>
       <View style={styles.imageContainer}>
         <Image
           source={LOADING_IMAGES[currentImageIndex]}
@@ -54,9 +54,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     zIndex: 1000,
   },
+  full: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgb(255, 255, 255)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 1000,
+  },
   imageContainer: {
     padding: 30,
-    backgroundColor: theme.colors.beige,
+    backgroundColor: "white",
     borderRadius: 16,
   },
   image: {

@@ -78,7 +78,6 @@ export default function Auth() {
   };
 
   const signUpWithGoogle = async () => {
-    console.log("test google");
     await promptAsync();
   };
 

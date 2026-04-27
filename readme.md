@@ -1,33 +1,35 @@
+in progress:
+
+- display for when theres no books
+
 todo:
 
-- cookbook shelf page:
-  - logic for filters
-  - display for when theres no books
-  - button to create new book
-- recipe page:
-  - create page layout
-  - create data object for recipe
-  - create api call to fetch recipes
+- ## profile
+
+- all recipes page
+  - list of all recipes
+  - filters
+
+- new book modal
+
+- cookbook list page:
+
+- recipe list page:
+  - search
+  - dont show time if null
+
+- create recipe modal:
+  - return on desc should close keyboard
+
+- recipe overvire page:
+  - photo taking time to load
 
 questions for mena:
 
 - flow for creating a new book
+  - steps / ingredients
 - graphics for when theres no books / no recipes
-
-data structure:
-
-cookbook:
-
-- id
-- title
-- owner
-- participants
-
-recipe:
-
-- id
-- owner
-- cookbook_id
-- ingridents
-- steps
-- cover_photo
+- what happens when you press the icons on the recipe card
+- profile / settings page
+- the other tabs
+- placeholder for missing images?

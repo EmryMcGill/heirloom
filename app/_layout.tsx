@@ -5,7 +5,8 @@ import {
   GentiumPlus_700Bold_Italic,
   useFonts,
 } from "@expo-google-fonts/gentium-plus";
-import { Slot, useRouter, useSegments } from "expo-router";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
@@ -36,13 +37,13 @@ function RootLayoutNav() {
     if (isLoading || !fontsLoaded) return;
 
     const inAuthGroup = segments[0] === "(auth)";
-    const inTabsGroup = segments[0] === "(tabs)";
+    const isRootIndex = segments.length === 0;
 
     if (!session && !inAuthGroup) {
       // User is not signed in and not on auth screen, redirect to welcome/auth
       router.replace("/");
-    } else if (session && !inTabsGroup) {
-      // User is signed in but not in the app, redirect to main app
+    } else if (session && isRootIndex) {
+      // Signed-in users landing on the root index should go to the main app.
       router.replace("/(tabs)");
     }
   }, [session, segments, isLoading, fontsLoaded]);
@@ -55,13 +56,20 @@ function RootLayoutNav() {
     );
   }
 
-  return <Slot />;
+  return (
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="(tabs)" />
+    </Stack>
+  );
 }
 
 export default function RootLayout() {
+  const queryClient = new QueryClient();
   return (
     <AuthProvider>
-      <RootLayoutNav />
+      <QueryClientProvider client={queryClient}>
+        <RootLayoutNav />
+      </QueryClientProvider>
     </AuthProvider>
   );
 }
