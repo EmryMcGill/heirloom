@@ -88,6 +88,7 @@ export default function NewBook() {
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+        automaticallyAdjustKeyboardInsets={true}
       >
         <Text style={styles.title}>Create Cookbook</Text>
 

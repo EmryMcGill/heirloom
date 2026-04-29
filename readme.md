@@ -2,8 +2,6 @@ in progress:
 
 todo:
 
-- keyboard avoidance
-
 - ## profile
 
 - all recipes page
@@ -11,12 +9,12 @@ todo:
   - filters
 
 - new book modal
+  - nothing to do
 
 - cookbook list page:
+  - nothing to do
 
 - recipe list page:
-  - search
-  - view for no recipes
 
 - create recipe modal:
   - return on desc should close keyboard

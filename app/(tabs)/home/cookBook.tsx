@@ -8,13 +8,21 @@ import { getRecipesByBookId } from "@/services/recipes";
 import { useQuery } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect } from "react";
-import { StyleSheet, TextInput, View } from "react-native";
+import { Book } from "lucide-react-native";
+import React, { useEffect, useState } from "react";
+import {
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 export default function CookBook() {
   const params = useLocalSearchParams();
   const book = params.book ? JSON.parse(params.book as string) : null;
   const router = useRouter();
+  const [searchQuery, setSearchQuery] = useState("");
 
   const { data: recipes = [], isLoading } = useQuery({
     queryKey: ["recipes", book?.id],
@@ -22,6 +30,10 @@ export default function CookBook() {
     enabled: !!book,
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
+
+  const filteredRecipes = recipes.filter((recipe) =>
+    recipe.title.toLowerCase().includes(searchQuery.toLowerCase()),
+  );
 
   useEffect(() => {
     if (recipes.length > 0) {
@@ -58,6 +70,8 @@ export default function CookBook() {
       {/* search input */}
       <TextInput
         placeholder="Search all recipes in this cookbook"
+        value={searchQuery}
+        onChangeText={setSearchQuery}
         style={{
           backgroundColor: theme.colors.grey,
           marginHorizontal: theme.spacing.md,
@@ -68,9 +82,42 @@ export default function CookBook() {
         }}
       />
 
+      <View style={{ paddingHorizontal: 12 }}>
+        <Divider />
+      </View>
+
+      {recipes.length === 0 && (
+        <View style={styles.noBookContainer}>
+          <View style={styles.noBookCircle}>
+            <Book size={32} />
+          </View>
+          <Text
+            style={{
+              fontFamily: theme.typography.fonts.regular,
+              fontSize: theme.typography.sizes.xl,
+            }}
+          >
+            No recipes yet
+          </Text>
+          <Text style={{ color: "grey", marginHorizontal: 12 }}>
+            Start building your collection of family recipes
+          </Text>
+          <TouchableOpacity
+            style={styles.addBookBtn}
+            onPress={() =>
+              router.push({
+                pathname: "/(tabs)/home/newRecipe",
+              })
+            }
+          >
+            <Text style={{ fontWeight: "bold" }}>Add your first recipe</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* recipes */}
-      {recipes.length > 0 &&
-        recipes.map((recipe, index) => {
+      {filteredRecipes.length > 0 &&
+        filteredRecipes.map((recipe, index) => {
           return (
             <View style={{ paddingHorizontal: 12 }} key={index}>
               {index === 0 ? <Divider /> : <View style={{ height: 12 }} />}
@@ -82,4 +129,22 @@ export default function CookBook() {
   );
 }
 
-const styles = StyleSheet.create({});
+const styles = StyleSheet.create({
+  noBookContainer: {
+    gap: 8,
+    width: "100%",
+    alignItems: "center",
+  },
+  noBookCircle: {
+    backgroundColor: theme.colors.grey,
+    padding: 16,
+    borderRadius: 999,
+    marginBottom: 8,
+  },
+  addBookBtn: {
+    backgroundColor: theme.colors.grey,
+    padding: 16,
+    borderRadius: 8,
+    marginTop: 16,
+  },
+});
