@@ -1,10 +1,8 @@
 in progress:
 
-- book card view when no cover photo
-- remove space when no desc
-- spacing between rows of the cards
-
 todo:
+
+- keyboard avoidance
 
 - ## profile
 
@@ -13,7 +11,6 @@ todo:
   - filters
 
 - new book modal
-  - keyboard avoidance
 
 - cookbook list page:
 

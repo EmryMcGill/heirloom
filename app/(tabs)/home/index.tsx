@@ -87,7 +87,10 @@ export default function CookbookShelf() {
         const secondBook = books[index + 1];
 
         return (
-          <View style={{ marginHorizontal: 12 }} key={index}>
+          <View
+            style={{ marginHorizontal: 12, marginTop: index !== 0 ? 12 : 0 }}
+            key={index}
+          >
             <View style={{ flexDirection: "row", gap: 12 }}>
               <BookCard book={firstBook} />
               {secondBook && <BookCard book={secondBook} />}

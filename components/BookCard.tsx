@@ -1,6 +1,6 @@
 import { theme } from "@/constants/theme";
-import { Book } from "@/models/book";
 import { router } from "expo-router";
+import { Book } from "lucide-react-native";
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
@@ -11,17 +11,26 @@ type BookCardProps = {
 export default function BookCard({ book }: BookCardProps) {
   return (
     <TouchableOpacity
-      style={theme.card}
+      style={[theme.card, { borderWidth: 2 }]}
       onPress={() =>
         router.push(
           `/(tabs)/home/cookBook?book=${encodeURIComponent(JSON.stringify(book))}`,
         )
       }
     >
-      <View style={styles.image}></View>
+      <View style={styles.image}>
+        {!book.image && (
+          <View style={styles.noBookCircle}>
+            <Book size={32} color="grey" />
+          </View>
+        )}
+      </View>
+      <View style={{ borderWidth: 1, borderColor: theme.colors.grey }} />
       <View style={styles.info}>
         <Text style={theme.cardTitle}>{book?.title}</Text>
-        <Text style={theme.cardSubtitle}>{book?.subTitle}</Text>
+        {book.subTitle && (
+          <Text style={theme.cardSubtitle}>{book?.subTitle}</Text>
+        )}
       </View>
     </TouchableOpacity>
   );
@@ -29,13 +38,20 @@ export default function BookCard({ book }: BookCardProps) {
 
 const styles = StyleSheet.create({
   image: {
-    backgroundColor: theme.colors.grey,
     flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
   info: {
     backgroundColor: "white",
     padding: theme.spacing.sm,
-    paddingVertical: theme.spacing.md,
+    paddingVertical: 12,
     gap: theme.spacing.xs,
+  },
+  noBookCircle: {
+    backgroundColor: theme.colors.grey,
+    padding: 16,
+    borderRadius: 999,
+    marginBottom: 8,
   },
 });
