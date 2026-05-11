@@ -59,7 +59,7 @@ export default function CookBook() {
         buttonTitle="Add recipe"
         buttonPress={() =>
           router.push({
-            pathname: "/(tabs)/home/newRecipe",
+            pathname: "/shared/newRecipe",
             params: {
               bookId: book.id,
             },
@@ -106,7 +106,7 @@ export default function CookBook() {
             style={styles.addBookBtn}
             onPress={() =>
               router.push({
-                pathname: "/(tabs)/home/newRecipe",
+                pathname: "/shared/newRecipe",
               })
             }
           >
@@ -116,15 +116,16 @@ export default function CookBook() {
       )}
 
       {/* recipes */}
-      {filteredRecipes.length > 0 &&
-        filteredRecipes.map((recipe, index) => {
-          return (
-            <View style={{ paddingHorizontal: 12 }} key={index}>
-              {index === 0 ? <Divider /> : <View style={{ height: 12 }} />}
-              <RecipeCard recipe={recipe} />
-            </View>
-          );
-        })}
+      <View style={{ gap: 8 }}>
+        {filteredRecipes.length > 0 &&
+          filteredRecipes.map((recipe, index) => {
+            return (
+              <View style={{ paddingHorizontal: 12 }} key={index}>
+                <RecipeCard recipe={recipe} />
+              </View>
+            );
+          })}
+      </View>
     </ScrollPage>
   );
 }

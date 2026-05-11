@@ -16,7 +16,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
 type Ingredient = {
   amount: string;
@@ -217,7 +220,13 @@ export default function NewRecipe() {
   };
 
   return (
-    <>
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: "#fff",
+      }}
+    >
+      <SafeAreaView edges={["top"]} />
       <ScrollView
         contentContainerStyle={styles.card}
         keyboardShouldPersistTaps="handled"
@@ -489,7 +498,7 @@ export default function NewRecipe() {
           )}
         </TouchableOpacity>
       </View>
-    </>
+    </View>
   );
 }
 const styles = StyleSheet.create({

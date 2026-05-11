@@ -1,7 +1,7 @@
 import { theme } from "@/constants/theme";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
-import Ionicons from "@expo/vector-icons/Ionicons";
 import { Tabs } from "expo-router";
+import { Library, NotebookText } from "lucide-react-native";
 import React from "react";
 
 // You can explore the built-in icon families and icons on the web at https://icons.expo.fyi/
@@ -29,16 +29,13 @@ export default function TabLayout() {
       <Tabs.Screen
         name="home"
         options={{
-          tabBarIcon: ({ color }) => (
-            <Ionicons name="library" size={24} color={color} />
-          ),
+          tabBarIcon: ({ color }) => <Library color={color} />,
         }}
       />
       <Tabs.Screen
-        name="two"
+        name="allRecipes"
         options={{
-          title: "Tab Two",
-          tabBarIcon: ({ color }) => <TabBarIcon name="code" color={color} />,
+          tabBarIcon: ({ color }) => <NotebookText color={color} />,
         }}
       />
     </Tabs>

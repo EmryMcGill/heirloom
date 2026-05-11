@@ -4,22 +4,20 @@ todo:
 
 - ## profile
 
-- all recipes page
-  - list of all recipes
-  - filters
-
 - new book modal
-  - nothing to do
+  - back button
+
+- create recipe modal:
+  - back button
 
 - cookbook list page:
   - nothing to do
 
 - recipe list page:
-
-- create recipe modal:
-  - return on desc should close keyboard
+  - no image display
 
 - recipe overvire page:
+  - no image display
   - photo taking time to load
   - view for no comments
   - make comment appear after creation

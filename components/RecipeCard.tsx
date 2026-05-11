@@ -10,7 +10,7 @@ export default function RecipeCard({ recipe }) {
       style={styles.card}
       onPress={() =>
         router.push(
-          `/(tabs)/home/recipePage?recipe=${encodeURIComponent(JSON.stringify(recipe))}`,
+          `/shared/recipePage?recipe=${encodeURIComponent(JSON.stringify(recipe))}`,
         )
       }
     >

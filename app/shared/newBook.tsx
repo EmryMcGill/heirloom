@@ -23,7 +23,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
 export default function NewBook() {
   const insets = useSafeAreaInsets();
@@ -83,7 +86,13 @@ export default function NewBook() {
   };
 
   return (
-    <>
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: "#fff",
+      }}
+    >
+      <SafeAreaView edges={["top"]} />
       <ScrollView
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
@@ -184,7 +193,7 @@ export default function NewBook() {
           )}
         </TouchableOpacity>
       </View>
-    </>
+    </View>
   );
 }
 

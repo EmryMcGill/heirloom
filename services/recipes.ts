@@ -29,6 +29,42 @@ export const getRecipesByBookId = async (bookId) => {
   return data ?? [];
 };
 
+export const getRecipesByUserId = async (userId: string) => {
+  const { data: bookUsers, error: bookUserError } = await supabase
+    .from("book_user")
+    .select("book_id")
+    .eq("user_id", userId);
+
+  if (bookUserError) throw bookUserError;
+
+  const bookIds = bookUsers?.map((item) => item.book_id) ?? [];
+  if (bookIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from("recipes")
+    .select(
+      `
+      *,
+      owner:profiles ( full_name ),
+      book:books (title),
+      comments:comments (
+        id,
+        created_at,
+        user_id,
+        recipe_id,
+        body,
+        user_name:profiles ( full_name )
+      )
+    `,
+    )
+    .in("book_id", bookIds)
+    .order("created_at", { ascending: false })
+    .order("created_at", { foreignTable: "comments", ascending: false });
+
+  if (error) throw error;
+  return data ?? [];
+};
+
 export const saveRecipe = async (recipe: RecipeRequest) => {
   const { data, error } = await supabase
     .from("recipes")

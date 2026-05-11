@@ -37,7 +37,7 @@ export default function CookbookShelf() {
         buttonTitle="Add book"
         buttonPress={() =>
           router.push({
-            pathname: "/(tabs)/home/newBook",
+            pathname: "/shared/newBook",
           })
         }
       />
@@ -71,7 +71,7 @@ export default function CookbookShelf() {
             style={styles.addBookBtn}
             onPress={() =>
               router.push({
-                pathname: "/(tabs)/home/newBook",
+                pathname: "/shared/newBook",
               })
             }
           >
