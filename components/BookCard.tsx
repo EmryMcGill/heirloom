@@ -1,57 +1,108 @@
-import { theme } from "@/constants/theme";
 import { router } from "expo-router";
-import { Book } from "lucide-react-native";
+import { Book as BookIcon } from "lucide-react-native";
 import React from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+
+type BookData = {
+  title: string;
+  subTitle?: string;
+  image_url?: string;
+};
 
 type BookCardProps = {
-  book: Book;
+  book: BookData;
 };
 
 export default function BookCard({ book }: BookCardProps) {
   return (
     <TouchableOpacity
-      style={[theme.card, { borderWidth: 2 }]}
+      style={styles.shadowWrapper}
+      activeOpacity={0.85}
       onPress={() =>
         router.push(
           `/(tabs)/home/cookBook?book=${encodeURIComponent(JSON.stringify(book))}`,
         )
       }
     >
-      <View style={styles.image}>
-        {!book.image && (
-          <View style={styles.noBookCircle}>
-            <Book size={32} color="grey" />
-          </View>
-        )}
-      </View>
-      <View style={{ borderWidth: 1, borderColor: theme.colors.grey }} />
-      <View style={styles.info}>
-        <Text style={theme.cardTitle}>{book?.title}</Text>
-        {book.subTitle && (
-          <Text style={theme.cardSubtitle}>{book?.subTitle}</Text>
-        )}
+      <View style={styles.cardInner}>
+        <View style={styles.imageContainer}>
+          {book.image_url ? (
+            <Image
+              source={{ uri: book.image_url }}
+              style={styles.coverImage}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={styles.noBookCircle}>
+              <BookIcon size={24} color="#A3A3A3" />
+            </View>
+          )}
+        </View>
+
+        <View style={styles.info}>
+          <Text style={styles.cardTitle} numberOfLines={1}>
+            {book?.title}
+          </Text>
+          {book.subTitle && (
+            <Text style={styles.cardSubtitle} numberOfLines={1}>
+              {book?.subTitle}
+            </Text>
+          )}
+        </View>
       </View>
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
-  image: {
-    flex: 1,
+  shadowWrapper: {
+    // 1. Give it a percentage width so two cards fit side-by-side safely
+    width: "48%",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    marginBottom: 16,
+
+    // iOS Shadow Properties
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06, // Slightly lower opacity looks cleaner when scaled down
+    shadowRadius: 10,
+
+    // Android Shadow Property
+    elevation: 3,
+  },
+  cardInner: {
+    borderRadius: 16,
+    overflow: "hidden",
+    backgroundColor: "#FFFFFF",
+  },
+  imageContainer: {
+    width: "100%",
+    height: 130, // Scaled down the height slightly so it matches the narrower width aspect ratio
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: "#F5F5F7",
+  },
+  coverImage: {
+    width: "100%",
+    height: "100%",
   },
   info: {
-    backgroundColor: "white",
-    padding: theme.spacing.sm,
-    paddingVertical: 12,
-    gap: theme.spacing.xs,
+    padding: 12,
+    gap: 2,
+  },
+  cardTitle: {
+    fontSize: 15, // Slightly scaled down text sizes for 2-column balance
+    fontWeight: "600",
+    color: "#1C1C1E",
+  },
+  cardSubtitle: {
+    fontSize: 12,
+    color: "#8E8E93",
   },
   noBookCircle: {
-    backgroundColor: theme.colors.grey,
-    padding: 16,
+    backgroundColor: "#E5E5EA",
+    padding: 12, // Scaled down padding for icon fallback
     borderRadius: 999,
-    marginBottom: 8,
   },
 });

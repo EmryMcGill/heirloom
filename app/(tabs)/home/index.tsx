@@ -2,15 +2,21 @@ import BookCard from "@/components/BookCard";
 import Divider from "@/components/Divider";
 import LoadingOverlay from "@/components/LoadingOverlay";
 import ScrollPage from "@/components/ScrollPage";
-import Title from "@/components/Title";
 import { theme } from "@/constants/theme";
 import { useAuth } from "@/contexts/AuthContext";
 import { getBooks } from "@/services/books";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
-import { Book } from "lucide-react-native";
-import React from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+// FIX 1: Added Book to the lucide imports
+import { Book, Plus } from "lucide-react-native";
+import React, { useState } from "react";
+import {
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 export default function CookbookShelf() {
   const router = useRouter();
@@ -18,12 +24,17 @@ export default function CookbookShelf() {
   const image = require("../../../assets/images/pattern1.png");
   const { session } = useAuth();
   const userId = session?.user?.id;
+  const [searchQuery, setSearchQuery] = useState("");
 
   const { data: books = [], isLoading } = useQuery({
     queryKey: ["books"],
     queryFn: () => getBooks(userId),
     staleTime: 1000 * 60 * 10,
   });
+
+  const filteredBooks = books.filter((book) =>
+    book.title.toLowerCase().includes(searchQuery.toLowerCase()),
+  );
 
   if (isLoading) {
     return <LoadingOverlay visible={true} mode="full" />;
@@ -32,20 +43,57 @@ export default function CookbookShelf() {
   return (
     <ScrollPage>
       {/* title */}
-      <Title
-        title="Bookshelf"
-        buttonTitle="Add book"
-        buttonPress={() =>
-          router.push({
-            pathname: "/shared/newBook",
-          })
-        }
-      />
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+          paddingHorizontal: theme.spacing.md,
+          paddingTop: theme.spacing.md,
+          gap: theme.spacing.md,
+        }}
+      >
+        <Text
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          style={{
+            fontFamily: theme.typography.fonts.regular,
+            fontSize: theme.typography.sizes.xxl,
+            marginBottom: 0,
+            flexShrink: 1,
+          }}
+        >
+          Cookbooks
+        </Text>
+        <TouchableOpacity
+          style={{
+            backgroundColor: theme.colors.black,
+            padding: 8,
+            borderRadius: 999,
+          }}
+          onPress={() => router.push("/shared/newBook")}
+        >
+          <Plus color="white" />
+        </TouchableOpacity>
+      </View>
 
-      {/* sub-title */}
-      <Text style={theme.edgeMargin}>
-        Curated collections of family recipes
-      </Text>
+      {/* search input */}
+      <TextInput
+        placeholder="Search your cookbooks"
+        value={searchQuery}
+        onChangeText={setSearchQuery}
+        style={{
+          marginHorizontal: theme.spacing.md,
+          marginTop: theme.spacing.sm,
+          padding: 8,
+          borderRadius: theme.borderRadius.md || 8,
+          fontSize: 16,
+          color: "#111",
+          marginBottom: 0,
+          borderWidth: 1,
+          borderColor: "#c1c1c1",
+        }}
+      />
 
       <View style={{ width: "100%", alignItems: "center" }}>
         <Divider />
@@ -54,7 +102,7 @@ export default function CookbookShelf() {
       {books.length === 0 && (
         <View style={styles.noBookContainer}>
           <View style={styles.noBookCircle}>
-            <Book size={32} />
+            <Book size={32} color={theme.colors.black} />
           </View>
           <Text
             style={{
@@ -81,20 +129,28 @@ export default function CookbookShelf() {
       )}
 
       {/* books */}
-      {books.map((_, index) => {
+      {filteredBooks.map((_, index) => {
         if (index % 2 !== 0) return null;
-        const firstBook = books[index];
-        const secondBook = books[index + 1];
+        const firstBook = filteredBooks[index];
+        const secondBook = filteredBooks[index + 1];
 
         return (
           <View
-            style={{ marginHorizontal: 12, marginTop: index !== 0 ? 12 : 0 }}
+            style={{
+              marginHorizontal: 12,
+              marginTop: index !== 0 ? 12 : 0,
+              flexDirection: "row",
+              gap: 12,
+            }}
             key={index}
           >
-            <View style={{ flexDirection: "row", gap: 12 }}>
-              <BookCard book={firstBook} />
-              {secondBook && <BookCard book={secondBook} />}
-            </View>
+            <BookCard book={firstBook} />
+            {secondBook ? (
+              <BookCard book={secondBook} />
+            ) : (
+              /* Empty invisible item with the same flex/layout characteristics to preserve symmetry */
+              <View style={{ flex: 1, backgroundColor: "transparent" }} />
+            )}
           </View>
         );
       })}

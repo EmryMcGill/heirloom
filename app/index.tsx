@@ -37,7 +37,7 @@ export default function WelcomeScreen() {
           styles.button,
           pressed && styles.buttonPressed,
         ]}
-        onPress={() => router.push("/(auth)/auth")}
+        onPress={() => router.replace("/(auth)/auth")}
       >
         <Text style={styles.buttonText}>Start your heirloom</Text>
       </Pressable>

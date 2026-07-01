@@ -11,6 +11,7 @@ type AuthContextType = {
   session: Session | null;
   isLoading: boolean;
   profile: Profile | null;
+  refreshProfile: (userId: string) => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -18,6 +19,7 @@ const AuthContext = createContext<AuthContextType>({
   session: null,
   isLoading: true,
   profile: null,
+  refreshProfile: async () => {},
   logout: async () => {},
 });
 
@@ -42,32 +44,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       if (session?.user) {
-        fetchProfile(session.user.id);
+        fetchProfile(session.user.id).finally(() => setIsLoading(false));
       } else {
         setProfile(null);
+        setIsLoading(false);
       }
     });
 
-    // get profile
-    const fetchProfile = async (userId: string) => {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("avatar_url, full_name")
-        .eq("id", userId)
-        .single();
-
-      if (!error) setProfile(data);
-    };
-
     return () => subscription.unsubscribe();
   }, []);
+
+  // get profile
+  const fetchProfile = async (userId: string) => {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("avatar_url, full_name")
+      .eq("id", userId)
+      .single();
+
+    if (!error) setProfile(data);
+  };
+
+  const refreshProfile = async (userId: string) => {
+    await fetchProfile(userId);
+  };
 
   const logout = async () => {
     await supabase.auth.signOut();
   };
 
   return (
-    <AuthContext.Provider value={{ session, isLoading, profile, logout }}>
+    <AuthContext.Provider
+      value={{ session, isLoading, profile, refreshProfile, logout }}
+    >
       {children}
     </AuthContext.Provider>
   );

@@ -1,37 +1,134 @@
 import Divider from "@/components/Divider";
-import ScrollPage from "@/components/ScrollPage";
 import { theme } from "@/constants/theme";
 import { Comment } from "@/models/comments";
 import { saveComment } from "@/services/comments";
+import { deleteRecipe } from "@/services/recipes";
 import { useQueryClient } from "@tanstack/react-query";
-import { Image } from "expo-image";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   Book,
   ChevronDown,
+  ChevronLeft,
   ChevronUp,
   Clock,
-  Edit2,
+  MoreHorizontal,
   Users,
 } from "lucide-react-native";
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
+  ActionSheetIOS,
+  Alert,
+  Image,
+  Keyboard,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-export default function recipePage() {
+const HERO_HEIGHT = 220;
+const STICKY_BAR_HEIGHT = 56;
+
+export default function RecipePage() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
-  const recipe = params.recipe ? JSON.parse(params.recipe as string) : null;
+  const queryClient = useQueryClient();
+
+  const parsedRecipe = params.recipe
+    ? JSON.parse(params.recipe as string)
+    : null;
+  const [recipe, setRecipe] = useState(parsedRecipe);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showStory, setShowStory] = useState(false);
+  const [newComment, setNewComment] = useState("");
+
+  const scrollViewRef = useRef<ScrollView>(null);
+  const [stickyVisible, setStickyVisible] = useState(false);
+
+  // Track the layout position of the comment section for precise scrolling
+  const [commentSectionY, setCommentSectionY] = useState(0);
+
+  const getDisplayName = (value: unknown) => {
+    if (typeof value === "string") return value;
+    if (value && typeof value === "object" && "full_name" in value) {
+      const fullName = (value as { full_name?: unknown }).full_name;
+      if (typeof fullName === "string") return fullName;
+    }
+    return "Unknown";
+  };
+
+  const handleDeleteRecipe = () => {
+    if (!recipe?.id) return;
+    Alert.alert(
+      "Delete recipe",
+      "Are you sure you want to permanently delete this recipe?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setIsDeleting(true);
+              await deleteRecipe(recipe.id);
+              await queryClient.invalidateQueries({
+                predicate: (query) => query.queryKey[0] === "recipes",
+              });
+              router.back();
+            } catch (error) {
+              console.error("Failed to delete recipe:", error);
+              Alert.alert("Delete failed", "Could not delete this recipe.");
+            } finally {
+              setIsDeleting(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const showRecipeMenu = () => {
+    ActionSheetIOS.showActionSheetWithOptions(
+      {
+        options: [
+          "Cancel",
+          "Edit Recipe",
+          "Make your version",
+          "Delete Recipe",
+        ],
+        destructiveButtonIndex: 3,
+        cancelButtonIndex: 0,
+        title: "Recipe Options",
+      },
+      (buttonIndex) => {
+        if (buttonIndex === 1) {
+          router.push({
+            pathname: "/shared/newRecipe",
+            params: { recipe: encodeURIComponent(JSON.stringify(recipe)) },
+          });
+        } else if (buttonIndex === 2) {
+          router.push({
+            pathname: "/shared/newRecipe",
+            params: {
+              recipe: encodeURIComponent(JSON.stringify(recipe)),
+              isClone: "true",
+            },
+          });
+        } else if (buttonIndex === 3) {
+          handleDeleteRecipe();
+        }
+      },
+    );
+  };
+
   const ingredients = React.useMemo(() => {
     if (!recipe?.ingredients) return [];
-
     let rawIngredients: unknown = recipe.ingredients;
-
     if (typeof rawIngredients === "string") {
       const trimmed = rawIngredients.trim();
       if (trimmed.startsWith("[")) {
@@ -44,49 +141,34 @@ export default function recipePage() {
         rawIngredients = [trimmed];
       }
     }
-
-    if (!Array.isArray(rawIngredients)) {
-      rawIngredients = [rawIngredients];
-    }
-
-    return rawIngredients
-      .map((item) => {
+    const rawIngredientsArray: unknown[] = Array.isArray(rawIngredients)
+      ? rawIngredients
+      : [rawIngredients];
+    return rawIngredientsArray
+      .map((item: unknown) => {
         if (!item) return null;
-
         if (typeof item === "string") {
           const trimmed = item.trim();
-
           if (trimmed.startsWith("{")) {
             try {
               return JSON.parse(trimmed) as { amount?: string; what?: string };
-            } catch {
-              // ignore parse error and fallback to splitting
-            }
+            } catch {}
           }
-
           const [amount, ...rest] = trimmed.split(" ");
-          return {
-            amount: amount || "",
-            what: rest.join(" ").trim(),
-          };
+          return { amount: amount || "", what: rest.join(" ").trim() };
         }
-
-        if (typeof item === "object") {
+        if (typeof item === "object")
           return item as { amount?: string; what?: string };
-        }
-
         return null;
       })
-      .filter(
-        (item): item is { amount: string; what: string } =>
-          !!item && (item.amount?.trim() || item.what?.trim()),
+      .filter((item): item is { amount: string; what: string } =>
+        Boolean(item && (item.amount?.trim() || item.what?.trim())),
       );
   }, [recipe?.ingredients]);
 
   const steps = React.useMemo(() => {
     if (!recipe?.steps) return [];
     if (Array.isArray(recipe.steps)) return recipe.steps;
-
     if (typeof recipe.steps === "string") {
       try {
         return JSON.parse(recipe.steps) as string[];
@@ -94,414 +176,518 @@ export default function recipePage() {
         return [recipe.steps];
       }
     }
-
     return [];
   }, [recipe?.steps]);
 
-  const [showStory, setShowStory] = useState(false);
-  const [newComment, setNewComment] = useState("");
-  const queryClient = useQueryClient();
-
   const handlePostComment = async () => {
-    if (!newComment.trim()) return;
-
-    const commentRequest = {
-      body: newComment,
-      recipe_id: recipe.id,
-    };
-
+    if (!newComment.trim() || !recipe?.id) return;
+    const commentRequest = { body: newComment, recipe_id: recipe.id };
     const res = await saveComment(commentRequest);
-
     setNewComment("");
-    queryClient.invalidateQueries(["recipes", recipe.book.id]);
+    setRecipe((currentRecipe: any) =>
+      currentRecipe
+        ? {
+            ...currentRecipe,
+            comments: [res, ...(currentRecipe.comments ?? [])],
+          }
+        : currentRecipe,
+    );
+    await queryClient.invalidateQueries({
+      predicate: (query) => query.queryKey[0] === "recipes",
+    });
+    Keyboard.dismiss();
+  };
 
-    if (res) {
-      recipe.comments.push(res);
+  const handleScroll = (event: any) => {
+    const yOffset = event.nativeEvent.contentOffset.y;
+    if (yOffset > HERO_HEIGHT * 0.5 && !stickyVisible) {
+      setStickyVisible(true);
+    } else if (yOffset <= HERO_HEIGHT * 0.5 && stickyVisible) {
+      setStickyVisible(false);
     }
   };
 
   return (
-    <ScrollPage>
-      {/* banner image */}
-      <Image style={styles.bannerImage} source={{ uri: recipe.image_url }} />
-
-      <View
-        style={{
-          marginHorizontal: 12,
-          marginTop: 24,
-        }}
-      >
-        {/* title */}
-        <Text>By {recipe.owner.full_name}</Text>
-        <Text style={theme.title}>{recipe.title}</Text>
-        <Text>{recipe.description}</Text>
-
-        <View
-          style={{
-            marginTop: theme.spacing.md,
-            gap: 8,
-            flexDirection: "row",
-            flexWrap: "wrap",
-          }}
-        >
-          {/* time */}
-          <View style={styles.tag}>
-            <Clock size={theme.typography.sizes.sm} color="black" />
-            <Text style={{ fontSize: theme.typography.sizes.sm }}>
-              {recipe.prep_time + recipe.cook_time + " min"}
-            </Text>
-          </View>
-          {/* servings */}
-          <View style={styles.tag}>
-            <Users size={theme.typography.sizes.sm} color="black" />
-            <Text style={{ fontSize: theme.typography.sizes.sm }}>
-              {recipe.servings + " servings"}
-            </Text>
-          </View>
-          {/* book */}
-          <View style={styles.tag}>
-            <Book size={theme.typography.sizes.sm} color="black" />
-            <Text style={{ fontSize: theme.typography.sizes.sm }}>
-              {recipe.book.title}
-            </Text>
-          </View>
-        </View>
-
-        <Divider />
-
-        <View
-          style={{
-            flexDirection: "row",
-            gap: 8,
-            marginBottom: 12,
-          }}
-        >
-          <TouchableOpacity
-            style={{
-              backgroundColor: theme.colors.grey,
-              padding: theme.spacing.sm,
-              borderRadius: theme.borderRadius.md,
-              flexDirection: "row",
-              gap: 4,
-              alignItems: "center",
-              flexShrink: 1, // 👈 important
-            }}
-          >
-            <Edit2 size={16} />
-            <Text
-              numberOfLines={1} // 👈 important
-              adjustsFontSizeToFit
-              style={{
-                fontWeight: theme.typography.fontWeights.semibold,
-                flexShrink: 1, // 👈 important
-              }}
-            >
-              Edit
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={{
-              padding: theme.spacing.sm,
-              borderRadius: theme.borderRadius.md,
-              borderWidth: 1,
-              flexDirection: "row",
-              gap: 4,
-              alignItems: "center",
-              flexShrink: 1,
-            }}
-          >
-            <Edit2 size={16} />
-            <Text
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              style={{
-                fontWeight: theme.typography.fontWeights.semibold,
-                flexShrink: 1,
-              }}
-            >
-              Make your version
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={{
-              padding: theme.spacing.sm,
-              borderRadius: theme.borderRadius.md,
-              borderColor: theme.colors.red,
-              borderWidth: 1,
-              flexDirection: "row",
-              gap: 4,
-              alignItems: "center",
-              flexShrink: 1,
-            }}
-          >
-            <Text
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              style={{
-                fontWeight: theme.typography.fontWeights.semibold,
-                flexShrink: 1,
-                color: theme.colors.red,
-              }}
-            >
-              Delete
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* story dropdown */}
-        <View>
-          <Pressable
-            style={{
-              flexDirection: "row",
-              gap: 4,
-              alignItems: "center",
-            }}
-            onPress={() => setShowStory(!showStory)}
-          >
-            <Text style={{ fontWeight: theme.typography.fontWeights.bold }}>
-              The story behind this recipe
-            </Text>
-            {showStory ? <ChevronUp /> : <ChevronDown />}
-          </Pressable>
-          {showStory && (
-            <View
-              style={{
-                borderWidth: 1,
-                borderRadius: theme.borderRadius.lg,
-                borderColor: theme.colors.grey,
-                padding: 8,
-                marginTop: 8,
-              }}
-            >
-              <Text>{recipe.story}</Text>
-            </View>
-          )}
-        </View>
-
-        <Divider />
-
-        {/* ingredients */}
-        <Text
-          style={{
-            fontWeight: theme.typography.fontWeights.semibold,
-            fontSize: theme.typography.sizes.md,
-          }}
-        >
-          Ingredients
-        </Text>
-
-        <View
-          style={{
-            marginTop: 12,
-            gap: 12,
-          }}
-        >
-          {ingredients.map((ingredient, index) => (
-            <View
-              key={index}
-              style={{ flexDirection: "row", gap: 12, alignItems: "center" }}
-            >
-              <View
-                style={{
-                  width: 10,
-                  height: 10,
-                  backgroundColor: theme.colors.grey,
-                  borderRadius: 50,
-                }}
-              />
-              <Text
-                style={{ fontSize: theme.typography.sizes.md, flexShrink: 1 }}
-              >
-                <Text style={{ fontWeight: theme.typography.fontWeights.bold }}>
-                  {ingredient.amount}
-                </Text>
-                {ingredient.what ? ` ${ingredient.what}` : ""}
-              </Text>
-            </View>
-          ))}
-        </View>
-
-        {/* steps */}
-        <Text
-          style={{
-            fontWeight: theme.typography.fontWeights.semibold,
-            fontSize: theme.typography.sizes.md,
-            marginTop: 24,
-          }}
-        >
-          Steps
-        </Text>
-
-        <View
-          style={{
-            marginTop: 12,
-            gap: 12,
-          }}
-        >
-          {steps.map((step, index) => (
-            <View
-              key={index}
-              style={{
-                flexDirection: "row",
-                gap: 12,
-                flex: 1,
-              }}
-            >
-              <View
-                style={{
-                  width: 40,
-                  height: 40,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: theme.colors.grey,
-                  borderRadius: 20,
-                }}
-              >
-                <Text style={{ fontSize: theme.typography.sizes.md }}>
-                  {index + 1}
-                </Text>
-              </View>
-              <Text
-                style={{
-                  flexShrink: 1,
-                  fontSize: theme.typography.sizes.md,
-                  paddingTop: 10,
-                }}
-              >
-                {step}
-              </Text>
-            </View>
-          ))}
-        </View>
-
-        {/* comment section */}
-        <View>
-          <Text
-            style={{
-              fontWeight: theme.typography.fontWeights.semibold,
-              fontSize: theme.typography.sizes.sm,
-              marginTop: 24,
-              marginBottom: 8,
-            }}
-          >
-            Comments
-          </Text>
-
-          <View
-            style={{
-              flexDirection: "row",
-              gap: 8,
-              marginBottom: 12,
-            }}
-          >
-            <TextInput
-              placeholder="Write a comment"
-              style={{
-                backgroundColor: theme.colors.grey,
-                fontSize: theme.typography.sizes.sm,
-                padding: theme.spacing.sm,
-                borderRadius: theme.borderRadius.lg,
-                flex: 1,
-              }}
-              value={newComment}
-              onChangeText={setNewComment}
-            />
-
+    <View style={styles.container}>
+      {stickyVisible && (
+        <View style={[styles.stickyBar, { paddingTop: insets.top }]}>
+          <View style={styles.stickyInner}>
             <TouchableOpacity
-              style={{
-                height: "100%",
-                backgroundColor: theme.colors.grey,
-                paddingHorizontal: theme.spacing.sm,
-                borderRadius: theme.borderRadius.lg,
-                borderWidth: 1,
-                flexDirection: "row",
-                gap: 4,
-                alignItems: "center",
-                flexShrink: 1,
-              }}
-              onPress={handlePostComment}
+              onPress={() => router.back()}
+              style={styles.navCircleBtn}
             >
-              <Text
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                style={{
-                  fontWeight: theme.typography.fontWeights.semibold,
-                  flexShrink: 1,
-                }}
-              >
-                Post
-              </Text>
+              <ChevronLeft size={22} color={theme.colors.black} />
+            </TouchableOpacity>
+            <Text style={styles.stickyTitle} numberOfLines={1}>
+              {recipe?.title}
+            </Text>
+            <TouchableOpacity
+              onPress={showRecipeMenu}
+              style={styles.navCircleBtn}
+            >
+              <MoreHorizontal size={20} color={theme.colors.black} />
             </TouchableOpacity>
           </View>
+        </View>
+      )}
 
-          <View style={{ gap: 8 }}>
-            {recipe.comments?.length === 0 && <Text>No comments</Text>}
-            {recipe.comments?.map((comment: Comment, index) => (
-              <View
-                key={index}
-                style={{
-                  borderWidth: 1,
-                  borderRadius: theme.borderRadius.xl,
-                  padding: 12,
-                }}
-              >
-                <View
-                  style={{
-                    flexDirection: "row",
-                    gap: 8,
-                    marginBottom: 12,
-                  }}
+      <ScrollView
+        ref={scrollViewRef}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+        automaticallyAdjustKeyboardInsets={true}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + 120 },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Media Layer */}
+        <View style={styles.hero}>
+          {recipe?.image_url ? (
+            <Image
+              source={{ uri: recipe.image_url }}
+              style={StyleSheet.absoluteFill}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={styles.heroFallbackWrap}>
+              <Book size={44} color="#a0a0a0" />
+            </View>
+          )}
+          <View style={[styles.heroControls, { top: insets.top + 8 }]}>
+            <TouchableOpacity
+              style={styles.navCircleBtn}
+              onPress={() => router.back()}
+            >
+              <ChevronLeft size={24} color={theme.colors.black} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.navCircleBtn}
+              onPress={showRecipeMenu}
+            >
+              <MoreHorizontal size={22} color={theme.colors.black} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Content Body Container */}
+        <View style={styles.mainContentBlock}>
+          <Text style={styles.authorTag}>
+            By {getDisplayName(recipe?.owner?.full_name)}
+          </Text>
+          <Text style={styles.recipeTitle}>{recipe?.title}</Text>
+          <Text style={styles.recipeDescription}>{recipe?.description}</Text>
+
+          {/* Clean Pill Metadata Tags */}
+          <View style={styles.tagWrapper}>
+            <View style={styles.tag}>
+              <Clock size={14} color="#555" />
+              <Text style={styles.tagText}>
+                {(recipe?.prep_time ?? 0) + (recipe?.cook_time ?? 0) + " min"}
+              </Text>
+            </View>
+            <View style={styles.tag}>
+              <Users size={14} color="#555" />
+              <Text style={styles.tagText}>
+                {recipe?.servings + " servings"}
+              </Text>
+            </View>
+            {recipe?.book?.title && (
+              <View style={styles.tag}>
+                <Book size={14} color="#555" />
+                <Text style={styles.tagText}>{recipe?.book?.title}</Text>
+              </View>
+            )}
+          </View>
+
+          <Divider />
+
+          {/* Collapsible Recipe Narrative */}
+          {recipe?.story && (
+            <>
+              <View style={styles.storySection}>
+                <Pressable
+                  style={styles.dropdownHeader}
+                  onPress={() => setShowStory(!showStory)}
                 >
-                  <Text
-                    style={{
-                      fontWeight: theme.typography.fontWeights.semibold,
-                    }}
-                  >
-                    {comment.user_name.full_name}
+                  <Text style={styles.dropdownHeaderText}>
+                    The story behind this recipe
+                  </Text>
+                  {showStory ? (
+                    <ChevronUp size={20} color="#333" />
+                  ) : (
+                    <ChevronDown size={20} color="#333" />
+                  )}
+                </Pressable>
+                {showStory && (
+                  <View style={styles.storyBox}>
+                    <Text style={styles.storyText}>{recipe?.story}</Text>
+                  </View>
+                )}
+              </View>
+              <Divider />
+            </>
+          )}
+
+          {/* High Density Ingredients Layout */}
+          <Text style={styles.sectionHeader}>Ingredients</Text>
+          <View style={styles.ingredientsContainer}>
+            {ingredients.map(
+              (ingredient: { amount: string; what: string }, index: number) => (
+                <View key={index} style={styles.ingredientRow}>
+                  <Text style={styles.ingredientAmount}>
+                    {ingredient.amount}
+                  </Text>
+                  <Text style={styles.ingredientWhat}>
+                    {ingredient.what || "—"}
                   </Text>
                 </View>
-                <Text style={{ fontSize: theme.typography.sizes.sm }}>
-                  {comment.body}
-                </Text>
-                <Text
-                  style={{
-                    fontSize: theme.typography.sizes.xs,
-                    color: "grey",
-                    marginTop: 8,
-                  }}
-                >
-                  {new Date(recipe.created_at).toLocaleDateString("en-US", {
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                  })}
-                </Text>
+              ),
+            )}
+          </View>
+
+          {/* Structured Preparation Steps */}
+          <Text style={styles.sectionHeader}>Steps</Text>
+          <View style={styles.stepsContainer}>
+            {steps.map((step: string, index: number) => (
+              <View key={index} style={styles.stepBlock}>
+                <View style={styles.stepNumberBadge}>
+                  <Text style={styles.stepNumberText}>{index + 1}</Text>
+                </View>
+                <Text style={styles.stepInstructionText}>{step}</Text>
               </View>
             ))}
           </View>
+
+          <Divider />
+
+          {/* Feed & Community Interactions */}
+          <View
+            style={styles.commentsSection}
+            onLayout={(e) => setCommentSectionY(e.nativeEvent.layout.y)}
+          >
+            <Text style={[styles.sectionHeader, { marginBottom: 12 }]}>
+              Comments
+            </Text>
+            <View style={styles.commentInputRow}>
+              <TextInput
+                placeholder="Write a comment..."
+                placeholderTextColor="#888"
+                style={styles.commentInput}
+                value={newComment}
+                onChangeText={setNewComment}
+                multiline
+                onFocus={() => {
+                  setTimeout(() => {
+                    scrollViewRef.current?.scrollTo({
+                      y: commentSectionY - 12,
+                      animated: true,
+                    });
+                  }, 150);
+                }}
+              />
+              <TouchableOpacity
+                style={styles.commentSubmitBtn}
+                onPress={handlePostComment}
+              >
+                <Text style={styles.commentSubmitText}>Post</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.commentsContainer}>
+              {recipe?.comments?.length === 0 && (
+                <Text style={styles.emptyCommentsText}>
+                  No comments yet. Be the first!
+                </Text>
+              )}
+              {recipe?.comments?.map((comment: Comment, index: number) => (
+                <View key={index} style={styles.commentCard}>
+                  <View style={styles.commentHeaderRow}>
+                    <Text style={styles.commentAuthor}>
+                      {getDisplayName(comment.user_name)}
+                    </Text>
+                    <Text style={styles.commentDate}>
+                      {new Date(recipe.created_at).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </Text>
+                  </View>
+                  <Text style={styles.commentBodyText}>{comment.body}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
         </View>
-      </View>
-    </ScrollPage>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  bannerImage: {
-    width: "100%",
-    height: 200,
-    backgroundColor: theme.colors.grey,
+  container: {
+    flex: 1,
+    backgroundColor: "#fff",
+  },
+  scrollContent: {
+    paddingTop: 0,
+  },
+  stickyBar: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    backgroundColor: theme.colors.beige || "#fbfbf9",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#e5e5e0",
+  },
+  stickyInner: {
+    height: STICKY_BAR_HEIGHT,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+  },
+  stickyTitle: {
+    flex: 1,
+    textAlign: "center",
+    fontWeight: "600",
+    fontSize: 16,
+    color: theme.colors.black,
+    paddingHorizontal: 8,
+  },
+  navCircleBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "rgba(255, 255, 255, 0.95)",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  hero: {
+    height: HERO_HEIGHT,
+    backgroundColor: "#f4f4f2",
+    overflow: "hidden",
+  },
+  heroFallbackWrap: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  heroControls: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    zIndex: 2,
+  },
+  mainContentBlock: {
+    paddingHorizontal: 16,
+    marginTop: 20,
+  },
+  authorTag: {
+    fontSize: 13,
+    color: "#666",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  recipeTitle: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: "#111",
+    lineHeight: 34,
+    marginBottom: 8,
+  },
+  recipeDescription: {
+    fontSize: 15,
+    color: "#444",
+    lineHeight: 22,
+    marginBottom: 16,
+  },
+  tagWrapper: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 4,
   },
   tag: {
-    gap: 8,
-    borderRadius: theme.borderRadius.round,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: theme.colors.text.secondary,
     flexDirection: "row",
-    padding: theme.spacing.sm,
-    paddingVertical: theme.spacing.xs,
-    alignSelf: "flex-start",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#f4f4f2",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  tagText: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: "#444",
+  },
+  storySection: {
+    marginVertical: 4,
+  },
+  dropdownHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 8,
+  },
+  dropdownHeaderText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#222",
+  },
+  storyBox: {
+    backgroundColor: "#fafaf9",
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: "#f0f0ed",
+  },
+  storyText: {
+    fontSize: 14,
+    color: "#4a4a46",
+    lineHeight: 21,
+    fontStyle: "italic",
+  },
+  sectionHeader: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#111",
+    marginTop: 20,
+    marginBottom: 12,
+  },
+  ingredientsContainer: {
+    backgroundColor: "#fff",
+    marginBottom: 8,
+  },
+  ingredientRow: {
+    flexDirection: "row",
+    justifyContent: "flex-start",
+    alignItems: "center",
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#eaeaea",
+  },
+  ingredientAmount: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#111",
+    // minWidth: 50,
+    marginRight: 8,
+  },
+  ingredientWhat: {
+    fontSize: 15,
+    color: "#222",
+    flex: 1,
+  },
+  stepsContainer: {
+    gap: 16,
+    marginBottom: 8,
+  },
+  stepBlock: {
+    flexDirection: "row",
+    gap: 14,
+  },
+  stepNumberBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#111",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 2,
+  },
+  stepNumberText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#fff",
+  },
+  stepInstructionText: {
+    flex: 1,
+    fontSize: 15,
+    color: "#333",
+    lineHeight: 23,
+  },
+  commentsSection: {
+    marginTop: 8,
+  },
+  commentInputRow: {
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "flex-end",
+    marginBottom: 20,
+  },
+  commentInput: {
+    backgroundColor: "#f5f5f5",
+    fontSize: 14,
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 10,
+    borderRadius: 10,
+    flex: 1,
+    maxHeight: 100,
+  },
+  commentSubmitBtn: {
+    backgroundColor: "#111",
+    paddingVertical: 11,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  commentSubmitText: {
+    color: "#fff",
+    fontWeight: "600",
+    fontSize: 14,
+  },
+  commentsContainer: {
+    gap: 12,
+  },
+  emptyCommentsText: {
+    fontSize: 14,
+    color: "#888",
+    fontStyle: "italic",
+    textAlign: "center",
+    paddingVertical: 12,
+  },
+  commentCard: {
+    backgroundColor: "#fafafa",
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#f0f0f0",
+  },
+  commentHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  commentAuthor: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#222",
+  },
+  commentDate: {
+    fontSize: 12,
+    color: "#999",
+  },
+  commentBodyText: {
+    fontSize: 14,
+    color: "#444",
+    lineHeight: 20,
   },
 });

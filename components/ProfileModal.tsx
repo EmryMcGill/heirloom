@@ -45,7 +45,6 @@ export default function ProfileModal() {
         style={styles.logoutButton}
         onPress={async () => {
           await logout();
-          router.replace("/auth"); // Navigate to login page
         }}
       >
         <View style={styles.logoutContent}>

@@ -2,20 +2,25 @@ import LoadingOverlay from "@/components/LoadingOverlay";
 import { theme } from "@/constants/theme";
 import * as Google from "expo-auth-session/providers/google";
 import { Image } from "expo-image";
+import * as ImagePicker from "expo-image-picker";
 import * as WebBrowser from "expo-web-browser";
+import { Plus, User } from "lucide-react-native";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
   AppState,
   Keyboard,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   TouchableWithoutFeedback,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useAuth } from "../../contexts/AuthContext";
 import { supabase } from "../../lib/supabase";
 
 WebBrowser.maybeCompleteAuthSession();
@@ -34,12 +39,14 @@ AppState.addEventListener("change", (state) => {
 });
 
 export default function Auth() {
+  const { refreshProfile } = useAuth();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState<Error[]>([]);
   const [loading, setLoading] = useState(false);
   const [isLogin, setIsLogin] = useState(false);
+  const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [request, response, promptAsync] = Google.useAuthRequest({
     iosClientId:
       "981357607208-b57c9juu2l1scmutuk8qv29vvep123at.apps.googleusercontent.com",
@@ -47,6 +54,57 @@ export default function Auth() {
       "981357607208-m7d3c6ndb44pctl5tqre1lncc0f9t2jn.apps.googleusercontent.com",
     redirectUri: "https://auth.expo.io/@emry/heirloom",
   });
+
+  const pickAvatar = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!permission.granted) {
+      alert("Photo library permission is required.");
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      setAvatarUri(result.assets[0].uri);
+    }
+  };
+
+  async function uploadAvatar(
+    userId: string,
+    uri: string,
+  ): Promise<string | null> {
+    try {
+      const response = await fetch(uri);
+      const arrayBuffer = await response.arrayBuffer();
+
+      const fileExt = uri.split(".").pop() ?? "jpg";
+      const filePath = `${userId}/avatar.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(filePath, arrayBuffer, {
+          contentType: `image/${fileExt}`,
+          upsert: true,
+        });
+
+      if (uploadError) {
+        Alert.alert("Avatar upload failed", uploadError.message);
+        return null;
+      }
+
+      const { data } = supabase.storage.from("avatars").getPublicUrl(filePath);
+      return data.publicUrl;
+    } catch (err) {
+      console.error("Avatar upload error:", err);
+      return null;
+    }
+  }
 
   useEffect(() => {
     if (response?.type === "success") {
@@ -140,7 +198,7 @@ export default function Auth() {
     // create the new account
     setLoading(true);
     const {
-      data: { session },
+      data: { session, user },
       error,
     } = await supabase.auth.signUp({
       email: trimmedEmail,
@@ -152,163 +210,216 @@ export default function Auth() {
       },
     });
 
-    if (error) Alert.alert(error.message);
+    if (error) {
+      Alert.alert(error.message);
+      setLoading(false);
+      return;
+    }
+
+    if (user) {
+      let avatarUrl: string | null = null;
+
+      if (avatarUri) {
+        avatarUrl = await uploadAvatar(user.id, avatarUri);
+      }
+
+      await supabase
+        .from("profiles")
+        .update({
+          full_name: trimmedName,
+          ...(avatarUrl && { avatar_url: avatarUrl }),
+        })
+        .eq("id", user.id);
+
+      await refreshProfile(user.id);
+    }
     setLoading(false);
   }
 
   return (
     <View style={{ flex: 1, position: "relative" }}>
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <SafeAreaView style={styles.container}>
-          {/* title */}
-          {!isLogin ? (
-            <Text style={styles.title}>Create an Account</Text>
-          ) : (
-            <Text style={styles.title}>Login</Text>
-          )}
+        <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.beige }}>
+          <ScrollView
+            contentContainerStyle={styles.container}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            automaticallyAdjustKeyboardInsets={true}
+            // ref={scrollViewRef}
+          >
+            {/* title */}
+            {!isLogin ? (
+              <Text style={styles.title}>Create an Account</Text>
+            ) : (
+              <Text style={styles.title}>Login</Text>
+            )}
 
-          {/* inputs */}
-          <View style={styles.inputContainer}>
-            {!isLogin && (
-              <View>
-                <TextInput
-                  style={[
-                    styles.textInput,
-                    errors?.find((e) => e.field === "name")?.msg &&
-                      styles.inputError,
-                  ]}
-                  onChangeText={(text) => {
-                    setName(text);
-                    validateField("name", text);
-                  }}
-                  value={name}
-                  placeholder="Name"
-                  returnKeyType="next"
-                  onSubmitEditing={() => emailRef.current?.focus()}
-                />
-                <View style={styles.errorContainer}>
-                  {errors?.find((e) => e.field === "name")?.msg && (
-                    <Text style={styles.errorText}>
-                      * {errors.find((e) => e.field === "name")?.msg}
-                    </Text>
+            <View style={{ gap: 8 }}>
+              <View style={styles.avatarWrapper}>
+                <TouchableOpacity
+                  style={styles.avatarContainer}
+                  onPress={pickAvatar}
+                >
+                  {avatarUri ? (
+                    <Image source={{ uri: avatarUri }} style={styles.avatar} />
+                  ) : (
+                    <User size={64} color="grey" />
                   )}
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.addButton} onPress={pickAvatar}>
+                  <Plus size={16} color="white" />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.helperText}>Tap to add a profile photo</Text>
+            </View>
+
+            {/* inputs */}
+            <View style={styles.inputContainer}>
+              {!isLogin && (
+                <View>
+                  <TextInput
+                    style={[
+                      styles.textInput,
+                      errors?.find((e) => e.field === "name")?.msg &&
+                        styles.inputError,
+                    ]}
+                    onChangeText={(text) => {
+                      setName(text);
+                      validateField("name", text);
+                    }}
+                    value={name}
+                    placeholder="Name"
+                    returnKeyType="next"
+                    onSubmitEditing={() => emailRef.current?.focus()}
+                  />
+                  <View style={styles.errorContainer}>
+                    {errors?.find((e) => e.field === "name")?.msg && (
+                      <Text style={styles.errorText}>
+                        * {errors.find((e) => e.field === "name")?.msg}
+                      </Text>
+                    )}
+                  </View>
                 </View>
+              )}
+              <TextInput
+                style={[
+                  styles.textInput,
+                  errors?.find((e) => e.field === "email")?.msg &&
+                    styles.inputError,
+                ]}
+                onChangeText={(text) => {
+                  setEmail(text);
+                  validateField("email", text);
+                }}
+                value={email}
+                placeholder="Email"
+                autoCapitalize={"none"}
+                ref={emailRef}
+                returnKeyType="next"
+                onSubmitEditing={() => passwordRef.current?.focus()}
+              />
+              <View style={styles.errorContainer}>
+                {errors?.find((e) => e.field === "email")?.msg && (
+                  <Text style={styles.errorText}>
+                    * {errors.find((e) => e.field === "email")?.msg}
+                  </Text>
+                )}
+              </View>
+
+              <TextInput
+                style={[
+                  styles.textInput,
+                  errors?.find((e) => e.field === "password")?.msg &&
+                    styles.inputError,
+                ]}
+                onChangeText={(text) => {
+                  setPassword(text);
+                  validateField("password", text);
+                }}
+                value={password}
+                secureTextEntry={true}
+                placeholder="Password"
+                autoCapitalize={"none"}
+                ref={passwordRef}
+              />
+              <View style={styles.errorContainer}>
+                {errors?.find((e) => e.field === "password")?.msg && (
+                  <Text style={styles.errorText}>
+                    * {errors.find((e) => e.field === "password")?.msg}
+                  </Text>
+                )}
+              </View>
+            </View>
+
+            {/* buttons */}
+            {!isLogin ? (
+              <View style={styles.buttonContainer}>
+                <Pressable
+                  style={styles.createAccountButton}
+                  onPress={() => signUpWithEmail()}
+                >
+                  <Text style={styles.createAccountButtonText}>
+                    Create Account
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={styles.googleButton}
+                  onPress={() => signUpWithGoogle()}
+                >
+                  <Image
+                    style={{ width: 20, height: 20 }}
+                    contentFit="contain"
+                    source={require("../../assets/images/google-logo.svg")}
+                  />
+                  <Text style={styles.googleButtonText}>
+                    Sign up with Google
+                  </Text>
+                </Pressable>
+              </View>
+            ) : (
+              <View style={styles.buttonContainer}>
+                <Pressable
+                  style={styles.createAccountButton}
+                  onPress={() => signInWithEmail()}
+                >
+                  <Text style={styles.createAccountButtonText}>Login</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.googleButton}
+                  onPress={() => signInWithEmail()}
+                >
+                  <Image
+                    style={{ width: 20, height: 20 }}
+                    contentFit="contain"
+                    source={require("../../assets/images/google-logo.svg")}
+                  />
+                  <Text style={styles.googleButtonText}>Login with Google</Text>
+                </Pressable>
               </View>
             )}
-            <TextInput
-              style={[
-                styles.textInput,
-                errors?.find((e) => e.field === "email")?.msg &&
-                  styles.inputError,
-              ]}
-              onChangeText={(text) => {
-                setEmail(text);
-                validateField("email", text);
-              }}
-              value={email}
-              placeholder="Email"
-              autoCapitalize={"none"}
-              ref={emailRef}
-              returnKeyType="next"
-              onSubmitEditing={() => passwordRef.current?.focus()}
-            />
-            <View style={styles.errorContainer}>
-              {errors?.find((e) => e.field === "email")?.msg && (
-                <Text style={styles.errorText}>
-                  * {errors.find((e) => e.field === "email")?.msg}
-                </Text>
-              )}
-            </View>
 
-            <TextInput
-              style={[
-                styles.textInput,
-                errors?.find((e) => e.field === "password")?.msg &&
-                  styles.inputError,
-              ]}
-              onChangeText={(text) => {
-                setPassword(text);
-                validateField("password", text);
-              }}
-              value={password}
-              secureTextEntry={true}
-              placeholder="Password"
-              autoCapitalize={"none"}
-              ref={passwordRef}
-            />
-            <View style={styles.errorContainer}>
-              {errors?.find((e) => e.field === "password")?.msg && (
-                <Text style={styles.errorText}>
-                  * {errors.find((e) => e.field === "password")?.msg}
-                </Text>
-              )}
-            </View>
-          </View>
-
-          {/* buttons */}
-          {!isLogin ? (
-            <View style={styles.buttonContainer}>
-              <Pressable
-                style={styles.createAccountButton}
-                onPress={() => signUpWithEmail()}
-              >
-                <Text style={styles.createAccountButtonText}>
-                  Create Account
-                </Text>
-              </Pressable>
-              <Pressable
-                style={styles.googleButton}
-                onPress={() => signUpWithGoogle()}
-              >
-                <Image
-                  style={{ width: 20, height: 20 }}
-                  contentFit="contain"
-                  source={require("../../assets/images/google-logo.svg")}
-                />
-                <Text style={styles.googleButtonText}>Sign up with Google</Text>
-              </Pressable>
-            </View>
-          ) : (
-            <View style={styles.buttonContainer}>
-              <Pressable
-                style={styles.createAccountButton}
-                onPress={() => signInWithEmail()}
-              >
-                <Text style={styles.createAccountButtonText}>Login</Text>
-              </Pressable>
-              <Pressable
-                style={styles.googleButton}
-                onPress={() => signInWithEmail()}
-              >
-                <Image
-                  style={{ width: 20, height: 20 }}
-                  contentFit="contain"
-                  source={require("../../assets/images/google-logo.svg")}
-                />
-                <Text style={styles.googleButtonText}>Login with Google</Text>
-              </Pressable>
-            </View>
-          )}
-
-          {/* footer */}
-          {!isLogin ? (
-            <View style={styles.footerContainer}>
-              <Text>Already have an account?</Text>
-              <Pressable onPress={() => setIsLogin(true)}>
-                <Text style={styles.loginButtonText}>Login</Text>
-              </Pressable>
-            </View>
-          ) : (
-            <View style={styles.footerContainer}>
-              <Text>Don't have an account?</Text>
-              <Pressable onPress={() => setIsLogin(false)}>
-                <Text style={styles.loginButtonText}>Create account</Text>
-              </Pressable>
-            </View>
-          )}
+            {/* footer */}
+            {!isLogin ? (
+              <View style={styles.footerContainer}>
+                <Text>Already have an account?</Text>
+                <Pressable onPress={() => setIsLogin(true)}>
+                  <Text style={styles.loginButtonText}>Login</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <View style={styles.footerContainer}>
+                <Text>Don't have an account?</Text>
+                <Pressable onPress={() => setIsLogin(false)}>
+                  <Text style={styles.loginButtonText}>Create account</Text>
+                </Pressable>
+              </View>
+            )}
+          </ScrollView>
         </SafeAreaView>
       </TouchableWithoutFeedback>
-      <LoadingOverlay visible={loading} />
+      <LoadingOverlay visible={loading} mode="modal" />
     </View>
   );
 }
@@ -397,5 +508,47 @@ const styles = StyleSheet.create({
   errorText: {
     color: theme.colors.red,
     lineHeight: 20,
+  },
+  avatarContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: "#eee",
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "center",
+    overflow: "hidden",
+  },
+  avatar: {
+    width: "100%",
+    height: "100%",
+  },
+  avatarPlaceholder: {
+    fontSize: 40,
+    color: "#888",
+  },
+  helperText: {
+    textAlign: "center",
+    color: "#666",
+  },
+  addButton: {
+    position: "absolute",
+    right: 0,
+    bottom: 0,
+
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+
+    backgroundColor: theme.colors.black,
+    justifyContent: "center",
+    alignItems: "center",
+
+    borderWidth: 2,
+    borderColor: "white",
+  },
+  avatarWrapper: {
+    alignSelf: "center",
+    position: "relative",
   },
 });

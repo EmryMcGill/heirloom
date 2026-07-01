@@ -8,20 +8,11 @@ import { getRecipesByUserId } from "@/services/recipes";
 import { useQuery } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
-import { Book, Plus } from "lucide-react-native";
+import { Book } from "lucide-react-native";
 import React, { useEffect, useState } from "react";
-import {
-  ActionSheetIOS,
-  Alert,
-  Platform,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { StyleSheet, Text, TextInput, View } from "react-native";
 
-export default function AllRecipes() {
+export default function SavedRecipes() {
   const router = useRouter();
   const { session } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
@@ -34,7 +25,9 @@ export default function AllRecipes() {
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
 
-  const filteredRecipes = recipes.filter((recipe) =>
+  const savedRecipes = recipes.filter((recipe) => recipe.saved);
+
+  const filteredRecipes = savedRecipes.filter((recipe) =>
     recipe.title.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
@@ -49,38 +42,6 @@ export default function AllRecipes() {
       }
     }
   }, [recipes]);
-
-  const handleAddRecipeOptions = () => {
-    if (Platform.OS === "ios") {
-      ActionSheetIOS.showActionSheetWithOptions(
-        {
-          options: ["Cancel", "Import from Link", "Enter Manually"],
-          cancelButtonIndex: 0,
-          title: "Add a Recipe",
-        },
-        (buttonIndex) => {
-          if (buttonIndex === 1) {
-            router.push("/shared/importRecipe");
-          } else if (buttonIndex === 2) {
-            router.push("/shared/newRecipe");
-          }
-        },
-      );
-    } else {
-      // Clean cross-platform fallback for Android testing
-      Alert.alert("Add New Recipe", "How would you like to add this recipe?", [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Import from Link",
-          onPress: () => router.push("/shared/importRecipe"),
-        },
-        {
-          text: "Enter Manually",
-          onPress: () => router.push("/shared/newRecipe"),
-        },
-      ]);
-    }
-  };
 
   if (isLoading) {
     return <LoadingOverlay visible={true} mode="full" />;
@@ -110,23 +71,13 @@ export default function AllRecipes() {
               flexShrink: 1,
             }}
           >
-            All Recipes
+            Saved Recipes
           </Text>
-          <TouchableOpacity
-            style={{
-              backgroundColor: theme.colors.black,
-              padding: 8,
-              borderRadius: 999,
-            }}
-            onPress={handleAddRecipeOptions}
-          >
-            <Plus color="white" />
-          </TouchableOpacity>
         </View>
 
         {/* search input */}
         <TextInput
-          placeholder="Search your recipes"
+          placeholder="Search your saved recipes"
           value={searchQuery}
           onChangeText={setSearchQuery}
           style={{
@@ -146,7 +97,7 @@ export default function AllRecipes() {
           <Divider />
         </View>
 
-        {recipes.length === 0 && (
+        {savedRecipes.length === 0 && (
           <View style={styles.noBookContainer}>
             <View style={styles.noBookCircle}>
               <Book size={32} />
@@ -157,17 +108,8 @@ export default function AllRecipes() {
                 fontSize: theme.typography.sizes.xl,
               }}
             >
-              No recipes yet
+              No saved recipes
             </Text>
-            <Text style={{ color: "grey", marginHorizontal: 12 }}>
-              Start building your collection of family recipes
-            </Text>
-            <TouchableOpacity
-              style={styles.addBookBtn}
-              onPress={handleAddRecipeOptions}
-            >
-              <Text style={{ fontWeight: "bold" }}>Add your first recipe</Text>
-            </TouchableOpacity>
           </View>
         )}
 
@@ -192,6 +134,7 @@ const styles = StyleSheet.create({
     gap: 8,
     width: "100%",
     alignItems: "center",
+    marginTop: 24,
   },
   noBookCircle: {
     backgroundColor: theme.colors.grey,

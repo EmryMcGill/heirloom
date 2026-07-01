@@ -1,4 +1,5 @@
 import { theme } from "@/constants/theme";
+import { supabase } from "@/lib/supabase";
 import { saveBook } from "@/services/books";
 import { useQueryClient } from "@tanstack/react-query";
 import * as ImagePicker from "expo-image-picker";
@@ -15,6 +16,7 @@ import React, { useState } from "react";
 
 import {
   ActivityIndicator,
+  Alert,
   Image,
   ScrollView,
   StyleSheet,
@@ -28,6 +30,46 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 
+async function uploadCoverImage(uri: string): Promise<string | null> {
+  try {
+    const response = await fetch(uri);
+    const arrayBuffer = await response.arrayBuffer();
+
+    const fileExt = uri.split(".").pop() ?? "jpg";
+    const fileName = `cover_${Date.now()}.${fileExt}`;
+
+    // Get the current user id to namespace the path
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const userId = session?.user?.id;
+    if (!userId) return null;
+
+    const filePath = `${userId}/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("recipe-images") // change this to your bucket name if different
+      .upload(filePath, arrayBuffer, {
+        contentType: `image/${fileExt}`,
+        upsert: true,
+      });
+
+    if (uploadError) {
+      Alert.alert("Cover upload failed", uploadError.message);
+      return null;
+    }
+
+    const { data } = supabase.storage
+      .from("recipe-images")
+      .getPublicUrl(filePath);
+
+    return data.publicUrl;
+  } catch (err) {
+    console.error("Cover upload error:", err);
+    return null;
+  }
+}
+
 export default function NewBook() {
   const insets = useSafeAreaInsets();
 
@@ -36,7 +78,6 @@ export default function NewBook() {
   const [coverImageUri, setCoverImageUri] =
     React.useState<ImagePicker.ImagePickerResult | null>(null);
   const [shareMode, setShareMode] = useState(0);
-
   const [loading, setLoading] = React.useState(false);
 
   const queryClient = useQueryClient();
@@ -48,7 +89,7 @@ export default function NewBook() {
       return;
     }
 
-    let result = await ImagePicker.launchImageLibraryAsync({
+    const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: false,
       aspect: [4, 3],
@@ -69,9 +110,17 @@ export default function NewBook() {
 
     setLoading(true);
 
+    // Upload cover image first if one was picked
+    let coverUrl: string | null = null;
+    const uri = coverImageUri?.assets?.[0]?.uri;
+    if (uri) {
+      coverUrl = await uploadCoverImage(uri);
+    }
+
     const book = {
       title: title.trim(),
       subTitle: description.trim(),
+      ...(coverUrl && { image_url: coverUrl }),
     };
 
     const res = await saveBook(book);
@@ -86,12 +135,7 @@ export default function NewBook() {
   };
 
   return (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: "#fff",
-      }}
-    >
+    <View style={{ flex: 1, backgroundColor: "#fff" }}>
       <SafeAreaView edges={["top"]} />
       <ScrollView
         contentContainerStyle={styles.container}
@@ -179,7 +223,6 @@ export default function NewBook() {
           </TouchableOpacity>
         </View>
 
-        {/* pick friends to share with */}
         <Text style={styles.label}>Select People to Share</Text>
       </ScrollView>
 

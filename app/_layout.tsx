@@ -5,20 +5,27 @@ import {
   GentiumPlus_700Bold_Italic,
   useFonts,
 } from "@expo-google-fonts/gentium-plus";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack, useRouter, useSegments } from "expo-router";
+import {
+  QueryClient,
+  QueryClientProvider,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { Stack, usePathname, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { AuthProvider, useAuth } from "../contexts/AuthContext";
+import { getRecipesByUserId } from "../services/recipes";
 
 // Prevent splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync();
 
 function RootLayoutNav() {
   const { session, isLoading } = useAuth();
-  const segments = useSegments();
+  const pathname = usePathname();
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const [recipesReady, setRecipesReady] = useState(false);
 
   const [fontsLoaded] = useFonts({
     GentiumPlus_400Regular,
@@ -34,21 +41,52 @@ function RootLayoutNav() {
   }, [fontsLoaded]);
 
   useEffect(() => {
-    if (isLoading || !fontsLoaded) return;
+    let isActive = true;
 
-    const inAuthGroup = segments[0] === "(auth)";
-    const isRootIndex = segments.length === 0;
+    const bootstrapRecipes = async () => {
+      const userId = session?.user?.id;
 
-    if (!session && !inAuthGroup) {
-      // User is not signed in and not on auth screen, redirect to welcome/auth
-      router.replace("/");
-    } else if (session && isRootIndex) {
-      // Signed-in users landing on the root index should go to the main app.
-      router.replace("/(tabs)");
+      if (!userId) {
+        setRecipesReady(true);
+        return;
+      }
+
+      setRecipesReady(false);
+
+      await queryClient.prefetchQuery({
+        queryKey: ["recipes", userId],
+        queryFn: () => getRecipesByUserId(userId),
+        staleTime: 1000 * 60 * 5,
+      });
+
+      if (isActive) {
+        setRecipesReady(true);
+      }
+    };
+
+    if (!isLoading && fontsLoaded) {
+      void bootstrapRecipes();
     }
-  }, [session, segments, isLoading, fontsLoaded]);
 
-  if (isLoading || !fontsLoaded) {
+    return () => {
+      isActive = false;
+    };
+  }, [session?.user?.id, isLoading, fontsLoaded, queryClient]);
+
+  useEffect(() => {
+    if (isLoading || !fontsLoaded || !recipesReady) return;
+
+    const isAuthRoute = pathname === "/auth";
+    const isWelcomeRoute = pathname === "/" || pathname === "/index";
+
+    if (!session && !isAuthRoute && !isWelcomeRoute) {
+      router.replace("/");
+    } else if (session && (isAuthRoute || isWelcomeRoute)) {
+      router.replace("/(tabs)/home");
+    }
+  }, [session, pathname, isLoading, fontsLoaded, recipesReady]);
+
+  if (isLoading || !fontsLoaded || !recipesReady) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#FF6B6B" />
@@ -62,9 +100,9 @@ function RootLayoutNav() {
     </Stack>
   );
 }
+const queryClient = new QueryClient();
 
 export default function RootLayout() {
-  const queryClient = new QueryClient();
   return (
     <AuthProvider>
       <QueryClientProvider client={queryClient}>
