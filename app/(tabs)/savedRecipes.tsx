@@ -90,6 +90,7 @@ export default function SavedRecipes() {
             marginBottom: 0,
             borderWidth: 1,
             borderColor: "#c1c1c1",
+            backgroundColor: "white",
           }}
         />
 
@@ -114,7 +115,7 @@ export default function SavedRecipes() {
         )}
 
         {/* recipes */}
-        <View style={{ gap: 8 }}>
+        <View style={{ gap: 2 }}>
           {filteredRecipes.length > 0 &&
             filteredRecipes.map((recipe, index) => {
               return (

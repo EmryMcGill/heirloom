@@ -92,6 +92,7 @@ export default function CookbookShelf() {
           marginBottom: 0,
           borderWidth: 1,
           borderColor: "#c1c1c1",
+          backgroundColor: "white",
         }}
       />
 

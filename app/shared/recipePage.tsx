@@ -18,10 +18,10 @@ import React, { useRef, useState } from "react";
 import {
   ActionSheetIOS,
   Alert,
+  Animated,
   Image,
   Keyboard,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -47,10 +47,9 @@ export default function RecipePage() {
   const [showStory, setShowStory] = useState(false);
   const [newComment, setNewComment] = useState("");
 
-  const scrollViewRef = useRef<ScrollView>(null);
-  const [stickyVisible, setStickyVisible] = useState(false);
+  const scrollViewRef = useRef<any>(null);
+  const scrollY = useRef(new Animated.Value(0)).current;
 
-  // Track the layout position of the comment section for precise scrolling
   const [commentSectionY, setCommentSectionY] = useState(0);
 
   const getDisplayName = (value: unknown) => {
@@ -126,44 +125,27 @@ export default function RecipePage() {
     );
   };
 
-  const ingredients = React.useMemo(() => {
-    if (!recipe?.ingredients) return [];
-    let rawIngredients: unknown = recipe.ingredients;
-    if (typeof rawIngredients === "string") {
-      const trimmed = rawIngredients.trim();
-      if (trimmed.startsWith("[")) {
+  // Evaluates ingredients to raw text line-breaks safely
+  const ingredientsText = React.useMemo(() => {
+    if (!recipe?.ingredients) return "";
+    const raw = recipe.ingredients;
+
+    if (typeof raw === "string") {
+      const trimmed = raw.trim();
+      if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
         try {
-          rawIngredients = JSON.parse(trimmed);
-        } catch {
-          rawIngredients = [trimmed];
-        }
-      } else {
-        rawIngredients = [trimmed];
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed)) return parsed.join("\n");
+        } catch {}
       }
+      return raw;
     }
-    const rawIngredientsArray: unknown[] = Array.isArray(rawIngredients)
-      ? rawIngredients
-      : [rawIngredients];
-    return rawIngredientsArray
-      .map((item: unknown) => {
-        if (!item) return null;
-        if (typeof item === "string") {
-          const trimmed = item.trim();
-          if (trimmed.startsWith("{")) {
-            try {
-              return JSON.parse(trimmed) as { amount?: string; what?: string };
-            } catch {}
-          }
-          const [amount, ...rest] = trimmed.split(" ");
-          return { amount: amount || "", what: rest.join(" ").trim() };
-        }
-        if (typeof item === "object")
-          return item as { amount?: string; what?: string };
-        return null;
-      })
-      .filter((item): item is { amount: string; what: string } =>
-        Boolean(item && (item.amount?.trim() || item.what?.trim())),
-      );
+
+    if (Array.isArray(raw)) {
+      return raw.join("\n");
+    }
+
+    return String(raw);
   }, [recipe?.ingredients]);
 
   const steps = React.useMemo(() => {
@@ -198,42 +180,55 @@ export default function RecipePage() {
     Keyboard.dismiss();
   };
 
-  const handleScroll = (event: any) => {
-    const yOffset = event.nativeEvent.contentOffset.y;
-    if (yOffset > HERO_HEIGHT * 0.5 && !stickyVisible) {
-      setStickyVisible(true);
-    } else if (yOffset <= HERO_HEIGHT * 0.5 && stickyVisible) {
-      setStickyVisible(false);
-    }
-  };
+  const heroOpacity = scrollY.interpolate({
+    inputRange: [0, HERO_HEIGHT * 0.6],
+    outputRange: [1, 0],
+    extrapolate: "clamp",
+  });
+
+  const stickyOpacity = scrollY.interpolate({
+    inputRange: [HERO_HEIGHT * 0.4, HERO_HEIGHT * 0.75],
+    outputRange: [0, 1],
+    extrapolate: "clamp",
+  });
 
   return (
     <View style={styles.container}>
-      {stickyVisible && (
-        <View style={[styles.stickyBar, { paddingTop: insets.top }]}>
-          <View style={styles.stickyInner}>
-            <TouchableOpacity
-              onPress={() => router.back()}
-              style={styles.navCircleBtn}
-            >
-              <ChevronLeft size={22} color={theme.colors.black} />
-            </TouchableOpacity>
-            <Text style={styles.stickyTitle} numberOfLines={1}>
-              {recipe?.title}
-            </Text>
-            <TouchableOpacity
-              onPress={showRecipeMenu}
-              style={styles.navCircleBtn}
-            >
-              <MoreHorizontal size={20} color={theme.colors.black} />
-            </TouchableOpacity>
-          </View>
+      {/* Sticky bar — fades in smoothly on scroll */}
+      <Animated.View
+        style={[
+          styles.stickyBar,
+          { paddingTop: insets.top, opacity: stickyOpacity },
+        ]}
+        pointerEvents="none"
+      >
+        <View style={styles.stickyInner}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.navCircleBtn}
+            pointerEvents="auto"
+          >
+            <ChevronLeft size={22} color={theme.colors.black} />
+          </TouchableOpacity>
+          <Text style={styles.stickyTitle} numberOfLines={1}>
+            {recipe?.title}
+          </Text>
+          <TouchableOpacity
+            onPress={showRecipeMenu}
+            style={styles.navCircleBtn}
+            pointerEvents="auto"
+          >
+            <MoreHorizontal size={20} color={theme.colors.black} />
+          </TouchableOpacity>
         </View>
-      )}
+      </Animated.View>
 
-      <ScrollView
+      <Animated.ScrollView
         ref={scrollViewRef}
-        onScroll={handleScroll}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true },
+        )}
         scrollEventThrottle={16}
         automaticallyAdjustKeyboardInsets={true}
         keyboardShouldPersistTaps="handled"
@@ -243,8 +238,8 @@ export default function RecipePage() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Media Layer */}
-        <View style={styles.hero}>
+        {/* Media Layer — fades out cleanly on scroll */}
+        <Animated.View style={[styles.hero, { opacity: heroOpacity }]}>
           {recipe?.image_url ? (
             <Image
               source={{ uri: recipe.image_url }}
@@ -270,7 +265,7 @@ export default function RecipePage() {
               <MoreHorizontal size={22} color={theme.colors.black} />
             </TouchableOpacity>
           </View>
-        </View>
+        </Animated.View>
 
         {/* Content Body Container */}
         <View style={styles.mainContentBlock}>
@@ -278,7 +273,9 @@ export default function RecipePage() {
             By {getDisplayName(recipe?.owner?.full_name)}
           </Text>
           <Text style={styles.recipeTitle}>{recipe?.title}</Text>
-          <Text style={styles.recipeDescription}>{recipe?.description}</Text>
+          {recipe.description ?? (
+            <Text style={styles.recipeDescription}>{recipe?.description}</Text>
+          )}
 
           {/* Clean Pill Metadata Tags */}
           <View style={styles.tagWrapper}>
@@ -301,8 +298,6 @@ export default function RecipePage() {
               </View>
             )}
           </View>
-
-          <Divider />
 
           {/* Collapsible Recipe Narrative */}
           {recipe?.story && (
@@ -331,20 +326,30 @@ export default function RecipePage() {
             </>
           )}
 
-          {/* High Density Ingredients Layout */}
+          {/* Ingredients Displayed Line-by-Line with Bullets */}
           <Text style={styles.sectionHeader}>Ingredients</Text>
           <View style={styles.ingredientsContainer}>
-            {ingredients.map(
-              (ingredient: { amount: string; what: string }, index: number) => (
-                <View key={index} style={styles.ingredientRow}>
-                  <Text style={styles.ingredientAmount}>
-                    {ingredient.amount}
-                  </Text>
-                  <Text style={styles.ingredientWhat}>
-                    {ingredient.what || "—"}
-                  </Text>
-                </View>
-              ),
+            {ingredientsText ? (
+              ingredientsText.split("\n").map((line: string, index: number) => {
+                const trimmedLine = line.trim();
+                if (!trimmedLine) return null;
+
+                return (
+                  <View key={index} style={styles.bulletRow}>
+                    <Text style={styles.bulletPoint}>•</Text>
+                    <Text style={styles.ingredientsText}>{trimmedLine}</Text>
+                  </View>
+                );
+              })
+            ) : (
+              <Text
+                style={[
+                  styles.ingredientsText,
+                  { fontStyle: "italic", color: "#888" },
+                ]}
+              >
+                No ingredients specified.
+              </Text>
             )}
           </View>
 
@@ -421,7 +426,7 @@ export default function RecipePage() {
             </View>
           </View>
         </View>
-      </ScrollView>
+      </Animated.ScrollView>
     </View>
   );
 }
@@ -460,9 +465,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   navCircleBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 42,
+    height: 42,
+    borderRadius: 99,
     backgroundColor: "rgba(255, 255, 255, 0.95)",
     alignItems: "center",
     justifyContent: "center",
@@ -566,31 +571,33 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "700",
     color: "#111",
-    marginTop: 20,
+    marginTop: 12,
     marginBottom: 12,
+  },
+  bulletRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 6,
+    paddingRight: 16,
+    borderBottomWidth: 1,
+    paddingBottom: 4,
+    borderBottomColor: "#dedede",
+  },
+  bulletPoint: {
+    fontSize: 24,
+    color: "#111",
+    marginRight: 4,
+    lineHeight: 24,
   },
   ingredientsContainer: {
     backgroundColor: "#fff",
+    paddingVertical: 4,
     marginBottom: 8,
   },
-  ingredientRow: {
-    flexDirection: "row",
-    justifyContent: "flex-start",
-    alignItems: "center",
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#eaeaea",
-  },
-  ingredientAmount: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#111",
-    // minWidth: 50,
-    marginRight: 8,
-  },
-  ingredientWhat: {
+  ingredientsText: {
     fontSize: 15,
     color: "#222",
+    lineHeight: 22,
     flex: 1,
   },
   stepsContainer: {
@@ -616,6 +623,7 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
   stepInstructionText: {
+    paddingTop: 5,
     flex: 1,
     fontSize: 15,
     color: "#333",

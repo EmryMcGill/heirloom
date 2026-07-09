@@ -1,6 +1,6 @@
 import { theme } from "@/constants/theme";
 import { useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import { ChevronLeft, Download } from "lucide-react-native";
 import React, { useState } from "react";
 import {
@@ -204,17 +204,30 @@ export default function ImportRecipe() {
     <View style={styles.container}>
       <SafeAreaView edges={["top"]} />
 
-      {/* Matched Modern Top Header Structure */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backButton}
-        >
-          <ChevronLeft size={24} color={theme.colors.black} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Import from Web</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: "Create recipe",
+          headerTitleStyle: {
+            fontFamily: theme.typography.fonts.regular,
+            fontSize: 24, // Clean native sizing
+            fontWeight: "600",
+            color: theme.colors.black,
+          },
+          headerStyle: {
+            backgroundColor: "#ffffff",
+          },
+          headerShadowVisible: true, // Adds standard platform separator line
+          headerLeft: () => (
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={{ marginLeft: 4, padding: 4 }}
+            >
+              <ChevronLeft size={24} color={theme.colors.black} />
+            </TouchableOpacity>
+          ),
+        }}
+      />
 
       <ScrollView
         contentContainerStyle={styles.scrollBody}
@@ -256,7 +269,6 @@ export default function ImportRecipe() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
   },
   header: {
     flexDirection: "row",
@@ -313,6 +325,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     borderWidth: 1,
     borderColor: "#c1c1c1",
+    backgroundColor: "#fff",
   },
   actionButton: {
     backgroundColor: "#111",

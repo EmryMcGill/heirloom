@@ -69,7 +69,12 @@ export default function RecipeCard({ recipe }: RecipeCardProps) {
         )
       }
     >
-      <View style={styles.image}>
+      <View
+        style={[
+          styles.image,
+          !recipe.image_url && { backgroundColor: "white", borderWidth: 2 },
+        ]}
+      >
         {!recipe.image_url && (
           <View style={styles.noBookCircle}>
             <NotebookText size={24} color="grey" />
@@ -93,7 +98,9 @@ export default function RecipeCard({ recipe }: RecipeCardProps) {
             gap: theme.spacing.xs,
           }}
         >
-          <Text style={theme.cardTitle}>{recipe?.title}</Text>
+          <Text style={{ fontSize: 16, fontWeight: "500" }}>
+            {recipe?.title}
+          </Text>
           <Text style={theme.cardSubtitle}>{recipe?.owner.full_name}</Text>
         </View>
         <View
@@ -157,17 +164,15 @@ const styles = StyleSheet.create({
   card: {
     height: 100,
     flexShrink: 1,
-    borderRadius: theme.borderRadius.md,
-    borderWidth: 1,
-    borderColor: theme.colors.grey,
     overflow: "hidden",
     flexDirection: "row",
     padding: 12,
     gap: 12,
+    backgroundColor: "white",
+    borderColor: "#f0f0f0",
+    borderWidth: 1,
   },
   image: {
-    backgroundColor: "white",
-    borderWidth: 2,
     borderColor: theme.colors.grey,
     height: "100%",
     aspectRatio: 1 / 1,

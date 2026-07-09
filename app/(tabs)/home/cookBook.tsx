@@ -1,3 +1,4 @@
+import Divider from "@/components/Divider";
 import LoadingOverlay from "@/components/LoadingOverlay";
 import RecipeCard from "@/components/RecipeCard";
 import { theme } from "@/constants/theme";
@@ -19,7 +20,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const HERO_HEIGHT = 200;
+const HERO_HEIGHT = 220;
 const STICKY_BAR_HEIGHT = 52;
 
 export default function CookBook() {
@@ -116,7 +117,7 @@ export default function CookBook() {
             />
           ) : (
             <View style={styles.heroIconWrap}>
-              <Book size={48} color="white" opacity={0.3} />
+              <Book size={48} color="#a0a0a0" />
             </View>
           )}
 
@@ -134,7 +135,8 @@ export default function CookBook() {
         {/* Title + recipe count + add button */}
         <View style={styles.heroText}>
           <View style={styles.heroTextRow}>
-            <View>
+            {/* Add flex: 1 right here */}
+            <View style={{ flex: 1, marginRight: 12 }}>
               <Text style={styles.heroTitle}>{book?.title}</Text>
             </View>
             <TouchableOpacity
@@ -146,7 +148,7 @@ export default function CookBook() {
                 })
               }
             >
-              <Plus size={16} color={theme.colors.black} />
+              <Plus size={16} color={"white"} />
               <Text style={styles.addRecipeBtnText}>Add recipe</Text>
             </TouchableOpacity>
           </View>
@@ -161,6 +163,10 @@ export default function CookBook() {
             onChangeText={setSearchQuery}
             style={styles.searchInput}
           />
+        </View>
+
+        <View style={{ width: "100%", alignItems: "center" }}>
+          <Divider />
         </View>
 
         {/* Empty state */}
@@ -218,18 +224,23 @@ const styles = StyleSheet.create({
     color: theme.colors.black,
   },
   stickyIconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "white",
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "rgba(255, 255, 255, 0.95)",
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
 
   // Hero
   hero: {
     height: HERO_HEIGHT,
-    backgroundColor: "#2c2c2c",
+    backgroundColor: "#f4f4f2",
     overflow: "hidden",
   },
   heroControls: {
@@ -243,10 +254,15 @@ const styles = StyleSheet.create({
   heroPill: {
     width: 42,
     height: 42,
-    borderRadius: 999,
-    backgroundColor: "white",
+    borderRadius: 99,
+    backgroundColor: "rgba(255, 255, 255, 0.95)",
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   heroIconWrap: {
     ...StyleSheet.absoluteFillObject,
@@ -278,27 +294,28 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: theme.colors.grey,
+    backgroundColor: theme.colors.black,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 999,
   },
   addRecipeBtnText: {
     fontSize: theme.typography.sizes.sm,
-    color: theme.colors.black,
+    color: "white",
     fontWeight: "500",
   },
 
   // Search
   searchWrap: {
     paddingHorizontal: theme.spacing.md,
-    paddingBottom: theme.spacing.sm,
   },
   searchInput: {
-    backgroundColor: theme.colors.grey,
-    fontSize: theme.typography.sizes.sm,
-    padding: theme.spacing.sm,
-    borderRadius: theme.borderRadius.lg,
+    padding: 8,
+    borderRadius: theme.borderRadius.md || 8,
+    fontSize: 16,
+    color: "#111",
+    borderWidth: 1,
+    borderColor: "#c1c1c1",
   },
 
   // Empty state
@@ -326,9 +343,9 @@ const styles = StyleSheet.create({
 
   // Recipe list
   listWrap: {
-    paddingHorizontal: 12,
-    gap: 8,
-    marginTop: 4,
+    gap: 2,
+    backgroundColor: "grey",
+    marginTop: 0,
   },
   recipeRow: {},
 });

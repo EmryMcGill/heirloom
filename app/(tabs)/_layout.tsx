@@ -1,11 +1,10 @@
 import { theme } from "@/constants/theme";
 import { useAuth } from "@/contexts/AuthContext";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
-import { Image } from "expo-image";
-import { router, Tabs } from "expo-router";
-import { Bookmark, Library, NotebookText } from "lucide-react-native";
+import { Tabs } from "expo-router";
+import { Bookmark, Library, NotebookText, User } from "lucide-react-native";
 import React from "react";
-import { StyleSheet, TouchableOpacity, View } from "react-native";
+import { StyleSheet } from "react-native";
 
 // You can explore the built-in icon families and icons on the web at https://icons.expo.fyi/
 function TabBarIcon(props: {
@@ -43,22 +42,6 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <NotebookText color={color} />,
           title: "Spurdle",
           headerShown: true,
-          headerRight: () => (
-            <TouchableOpacity
-              style={styles.profileButton}
-              onPress={() => router.push("/home/profile")}
-            >
-              {profile?.avatar_url ? (
-                <Image
-                  source={{ uri: `${profile.avatar_url}?t=${Date.now()}` }}
-                  style={styles.avatar}
-                  contentFit="cover"
-                />
-              ) : (
-                <View style={styles.placeholder} />
-              )}
-            </TouchableOpacity>
-          ),
         }}
       />
       <Tabs.Screen
@@ -67,22 +50,15 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <Bookmark color={color} />,
           title: "Spurdle",
           headerShown: true,
-          headerRight: () => (
-            <TouchableOpacity
-              style={styles.profileButton}
-              onPress={() => router.push("/home/profile")}
-            >
-              {profile?.avatar_url ? (
-                <Image
-                  source={{ uri: `${profile.avatar_url}?t=${Date.now()}` }}
-                  style={styles.avatar}
-                  contentFit="cover"
-                />
-              ) : (
-                <View style={styles.placeholder} />
-              )}
-            </TouchableOpacity>
-          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="profile"
+        options={{
+          tabBarIcon: ({ color }) => <User color={color} />,
+          title: "Spurdle",
+          headerShown: true,
         }}
       />
     </Tabs>

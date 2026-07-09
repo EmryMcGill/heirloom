@@ -3,7 +3,7 @@ import { RecipeRequest } from "@/models/recipe";
 import { saveRecipe, uploadImage } from "@/services/recipes";
 import { useQueryClient } from "@tanstack/react-query";
 import * as ImagePicker from "expo-image-picker";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, Stack, useLocalSearchParams } from "expo-router";
 import { ChevronLeft, Image, X } from "lucide-react-native";
 import React, { useState } from "react";
 import {
@@ -15,10 +15,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function NewRecipe() {
   const [loading, setLoading] = React.useState(false);
@@ -222,23 +219,30 @@ export default function NewRecipe() {
 
   return (
     <View style={styles.container}>
-      <SafeAreaView edges={["top"]} />
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backButton}
-        >
-          <ChevronLeft size={24} color={theme.colors.black} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>
-          {isClone
-            ? "Make your version"
-            : recipe
-              ? "Edit Recipe"
-              : "Create Recipe"}
-        </Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: "Create recipe",
+          headerTitleStyle: {
+            fontFamily: theme.typography.fonts.regular,
+            fontSize: 24, // Clean native sizing
+            fontWeight: "600",
+            color: theme.colors.black,
+          },
+          headerStyle: {
+            backgroundColor: "#ffffff",
+          },
+          headerShadowVisible: true, // Adds standard platform separator line
+          headerLeft: () => (
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={{ marginLeft: 4, padding: 4 }}
+            >
+              <ChevronLeft size={24} color={theme.colors.black} />
+            </TouchableOpacity>
+          ),
+        }}
+      />
 
       <ScrollView
         contentContainerStyle={styles.scrollBody}
@@ -437,7 +441,7 @@ export default function NewRecipe() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
+  container: { flex: 1 },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -446,6 +450,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.grey,
+    backgroundColor: "#fff",
   },
   backButton: {
     width: 40,
@@ -476,9 +481,17 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderWidth: 1,
     borderColor: "#c1c1c1",
+    backgroundColor: "#fff",
   },
-  coverImage: { width: "100%", height: "100%", resizeMode: "cover" },
-  placeholderContainer: { alignItems: "center", gap: 6 },
+  coverImage: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
+  },
+  placeholderContainer: {
+    alignItems: "center",
+    gap: 6,
+  },
   placeholderText: { fontSize: 13, color: theme.colors.text.secondary },
   boxInput: {
     padding: 12,
@@ -488,6 +501,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     borderWidth: 1,
     borderColor: "#c1c1c1",
+    backgroundColor: "#fff",
   },
   textAreaInput: { height: 80, textAlignVertical: "top" },
 
@@ -534,7 +548,7 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     padding: 12,
     borderTopWidth: 1,
-    borderTopColor: theme.colors.grey,
+    borderTopColor: "#cccccc",
   },
   saveBtn: {
     backgroundColor: theme.colors.black,

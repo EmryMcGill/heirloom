@@ -139,6 +139,7 @@ export default function AllRecipes() {
             marginBottom: 0,
             borderWidth: 1,
             borderColor: "#c1c1c1",
+            backgroundColor: "white",
           }}
         />
 
@@ -172,11 +173,11 @@ export default function AllRecipes() {
         )}
 
         {/* recipes */}
-        <View style={{ gap: 8 }}>
+        <View style={{ gap: 2 }}>
           {filteredRecipes.length > 0 &&
             filteredRecipes.map((recipe, index) => {
               return (
-                <View style={{ paddingHorizontal: 12 }} key={index}>
+                <View style={{}} key={index}>
                   <RecipeCard recipe={recipe} />
                 </View>
               );

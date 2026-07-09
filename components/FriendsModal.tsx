@@ -1,3 +1,4 @@
+import { theme } from "@/constants/theme";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   acceptFriendRequest,
@@ -8,8 +9,15 @@ import {
   searchUsers,
   sendFriendRequest,
 } from "@/services/friends";
-import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Stack, useRouter } from "expo-router"; // Imported Stack for native header config
+import {
+  ChevronLeft,
+  MoreHorizontal,
+  Search,
+  UserPlus,
+  Users,
+} from "lucide-react-native";
 import React, { useState } from "react";
 import {
   FlatList,
@@ -28,6 +36,7 @@ type Profile = {
 
 export default function FriendsScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { session } = useAuth();
   const userId = session?.user?.id;
   const queryClient = useQueryClient();
@@ -35,14 +44,13 @@ export default function FriendsScreen() {
   const [search, setSearch] = useState("");
   const [sentRequests, setSentRequests] = useState<string[]>([]);
 
-  // 🔹 Friends
+  // 🔹 Friends Queries
   const { data: friends = [] } = useQuery({
     queryKey: ["friends"],
     queryFn: () => getFriends(userId!),
     enabled: !!userId,
   });
 
-  // 🔹 Requests
   const { data: requests = [] } = useQuery({
     queryKey: ["friendRequests"],
     queryFn: () => getFriendRequests(userId!),
@@ -55,14 +63,13 @@ export default function FriendsScreen() {
     enabled: !!userId,
   });
 
-  // 🔹 Search
   const { data: results = [] } = useQuery({
     queryKey: ["searchUsers", search],
     queryFn: () => searchUsers(search),
     enabled: search.length > 1,
   });
 
-  // 🔹 Accept
+  // 🔹 Mutations
   const acceptMutation = useMutation({
     mutationFn: acceptFriendRequest,
     onSuccess: () => {
@@ -71,7 +78,6 @@ export default function FriendsScreen() {
     },
   });
 
-  // 🔹 Decline
   const declineMutation = useMutation({
     mutationFn: declineFriendRequest,
     onSuccess: () => {
@@ -79,7 +85,6 @@ export default function FriendsScreen() {
     },
   });
 
-  // 🔹 Send request
   const sendMutation = useMutation({
     mutationFn: (receiverId: string) => sendFriendRequest(userId!, receiverId),
     onSuccess: (_, receiverId) => {
@@ -88,17 +93,39 @@ export default function FriendsScreen() {
   });
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>Friends</Text>
-      </View>
+    <View style={styles.container}>
+      {/* 🛠️ NATIVE HEADER CONFIGURATION (Matches NewRecipe Style) */}
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: "Friends",
+          headerTitleStyle: {
+            fontFamily: theme.typography.fonts.regular,
+            fontSize: 20,
+            fontWeight: "600",
+            color: theme.colors.black,
+          },
+          headerStyle: {
+            backgroundColor: "#ffffff",
+          },
+          headerShadowVisible: true,
+          headerLeft: () => (
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={{ marginLeft: 4, padding: 4 }}
+            >
+              <ChevronLeft size={24} color={theme.colors.black} />
+            </TouchableOpacity>
+          ),
+        }}
+      />
 
-      {/* Search */}
-      <View style={styles.searchContainer}>
-        <Ionicons name="search" size={18} color="#666" />
+      {/* Search Input Bar (Spaced cleanly below native header) */}
+      <View style={styles.searchWrap}>
+        <Search size={18} color="#999" style={styles.searchIcon} />
         <TextInput
-          placeholder="Search users"
+          placeholder="Search for users..."
+          placeholderTextColor="#999"
           value={search}
           onChangeText={setSearch}
           style={styles.searchInput}
@@ -107,89 +134,116 @@ export default function FriendsScreen() {
 
       <FlatList
         data={[]}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
         ListHeaderComponent={
           <>
             {/* 🔍 Search Results */}
             {search.length > 1 && (
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Search</Text>
+                <Text style={styles.sectionTitle}>Search results</Text>
+                <View style={styles.groupCard}>
+                  {results.length === 0 ? (
+                    <Text style={styles.emptyText}>No users found.</Text>
+                  ) : (
+                    results.map((user: Profile, idx) => {
+                      if (user.id === userId) return null;
 
-                {results.map((user: Profile) => {
-                  if (user.id === userId) return null;
+                      const isRequested =
+                        sentRequests.includes(user.id) ||
+                        outgoing.some((r) => r.receiver_id === user.id);
 
-                  const isRequested =
-                    sentRequests.includes(user.id) ||
-                    outgoing.some((r) => r.receiver_id === user.id);
-
-                  return (
-                    <View key={user.id} style={styles.row}>
-                      <Text style={styles.name}>{user.full_name}</Text>
-
-                      {isRequested ? (
-                        <Text style={styles.requestedText}>Requested ✓</Text>
-                      ) : (
-                        <TouchableOpacity
-                          onPress={() => sendMutation.mutate(user.id)}
+                      return (
+                        <View
+                          key={user.id}
+                          style={[
+                            styles.row,
+                            idx === 0 && { borderTopWidth: 0 },
+                          ]}
                         >
-                          <Text style={styles.addText}>Add</Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  );
-                })}
+                          <Text style={styles.name}>{user.full_name}</Text>
+                          {isRequested ? (
+                            <View style={styles.requestedBadge}>
+                              <Text style={styles.requestedText}>Sent</Text>
+                            </View>
+                          ) : (
+                            <TouchableOpacity
+                              style={styles.addBtn}
+                              onPress={() => sendMutation.mutate(user.id)}
+                            >
+                              <UserPlus size={16} color={theme.colors.black} />
+                              <Text style={styles.addText}>Add</Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      );
+                    })
+                  )}
+                </View>
               </View>
             )}
 
-            {/* 📩 Requests */}
+            {/* 📩 Incoming Friend Requests */}
             {requests.length > 0 && (
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Requests</Text>
-
-                {requests.map((req: any) => (
-                  <View key={req.id} style={styles.row}>
-                    <Text style={styles.name}>
-                      {req?.requester?.full_name ?? "Unknown"}
-                    </Text>
-
-                    <View style={styles.actions}>
-                      <TouchableOpacity
-                        style={styles.acceptBtn}
-                        onPress={() => acceptMutation.mutate(req.id)}
-                      >
-                        <Text style={styles.acceptText}>Accept</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.declineBtn}
-                        onPress={() => declineMutation.mutate(req.id)}
-                      >
-                        <Text style={styles.declineText}>Decline</Text>
-                      </TouchableOpacity>
+                <Text style={styles.sectionTitle}>Incoming Requests</Text>
+                <View style={styles.groupCard}>
+                  {requests.map((req: any, idx) => (
+                    <View
+                      key={req.id}
+                      style={[styles.row, idx === 0 && { borderTopWidth: 0 }]}
+                    >
+                      <Text style={styles.name}>
+                        {req?.requester?.full_name ?? "Unknown user"}
+                      </Text>
+                      {/* 🛠️ Redesigned text-based buttons */}
+                      <View style={styles.actions}>
+                        <TouchableOpacity
+                          style={styles.declineTextButton}
+                          onPress={() => declineMutation.mutate(req.id)}
+                        >
+                          <Text style={styles.declineButtonText}>Ignore</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.acceptTextButton}
+                          onPress={() => acceptMutation.mutate(req.id)}
+                        >
+                          <Text style={styles.acceptButtonText}>Accept</Text>
+                        </TouchableOpacity>
+                      </View>
                     </View>
-                  </View>
-                ))}
+                  ))}
+                </View>
               </View>
             )}
 
-            {/* 👥 Friends */}
+            {/* 👥 Your Friends List */}
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Your Friends</Text>
-
+              <Text style={styles.sectionTitle}>Your friends</Text>
               {friends.length === 0 ? (
-                <Text style={styles.emptyText}>
-                  No friends yet. Start by adding some 👇
-                </Text>
-              ) : (
-                friends.map((user: Profile) => (
-                  <View key={user.id} style={styles.row}>
-                    <Text style={styles.name}>{user.full_name}</Text>
-                    <Ionicons
-                      name="ellipsis-horizontal"
-                      size={20}
-                      color="#666"
-                    />
+                <View style={styles.emptyContainer}>
+                  <View style={styles.emptyCircle}>
+                    <Users size={32} color={theme.colors.black} />
                   </View>
-                ))
+                  <Text style={styles.emptyMainText}>No friends yet</Text>
+                  <Text style={styles.emptySubText}>
+                    Search for users above to build your network!
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.groupCard}>
+                  {friends.map((user: Profile, idx) => (
+                    <View
+                      key={user.id}
+                      style={[styles.row, idx === 0 && { borderTopWidth: 0 }]}
+                    >
+                      <Text style={styles.name}>{user.full_name}</Text>
+                      <TouchableOpacity style={styles.moreButton}>
+                        <MoreHorizontal size={18} color="#8E8E93" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
               )}
             </View>
           </>
@@ -202,82 +256,143 @@ export default function FriendsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
     paddingHorizontal: 16,
   },
-  header: {
-    paddingBottom: 10,
+  searchWrap: {
+    position: "relative",
+    justifyContent: "center",
+    marginBottom: 20,
+    marginTop: 16,
   },
-  title: {
-    fontSize: 22,
-    fontWeight: "600",
-  },
-  searchContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#f2f2f2",
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    height: 40,
-    marginBottom: 16,
-    gap: 6,
+  searchIcon: {
+    position: "absolute",
+    left: 12,
+    zIndex: 2,
   },
   searchInput: {
-    flex: 1,
+    padding: 10,
+    paddingLeft: 38,
+    borderRadius: theme.borderRadius.md || 8,
+    fontSize: 16,
+    color: "#111",
+    borderWidth: 1,
+    borderColor: "#c1c1c1",
+    backgroundColor: "#FFFFFF",
   },
   section: {
-    marginBottom: 20,
+    marginBottom: 24,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 12,
     fontWeight: "600",
-    marginBottom: 10,
+    color: "#666",
+    letterSpacing: 0.5,
+    marginBottom: 8,
+    marginLeft: 4,
+  },
+  groupCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#E5E5EA",
+    overflow: "hidden",
   },
   row: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 10,
-    borderBottomWidth: 0.5,
-    borderColor: "#ddd",
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderTopWidth: 1,
+    borderColor: "#E5E5EA",
   },
   name: {
-    fontSize: 15,
+    fontSize: 16,
+    fontWeight: "500",
+    color: theme.colors.black,
   },
   actions: {
     flexDirection: "row",
-    gap: 8,
+    alignItems: "center",
+    gap: 12,
   },
-  acceptBtn: {
-    backgroundColor: "#4CAF50",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 6,
+  /* 🔹 New Action Buttons Styles */
+  acceptTextButton: {
+    backgroundColor: theme.colors.black,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 8,
   },
-  acceptText: {
-    color: "#fff",
-    fontSize: 13,
+  acceptButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#FFFFFF",
   },
-  declineBtn: {
-    backgroundColor: "#eee",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 6,
+  declineTextButton: {
+    paddingHorizontal: 6,
+    paddingVertical: 6,
   },
-  declineText: {
-    fontSize: 13,
-    color: "#333",
+  declineButtonText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#666666",
+  },
+  addBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: theme.colors.grey || "#F2F2F7",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
   },
   addText: {
-    color: "#007AFF",
-    fontWeight: "500",
+    fontSize: 13,
+    fontWeight: "600",
+    color: theme.colors.black,
+  },
+  requestedBadge: {
+    backgroundColor: "#E5E5EA",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
   },
   requestedText: {
-    color: "#888",
+    color: "#8E8E93",
+    fontSize: 13,
     fontWeight: "500",
   },
-  emptyText: {
-    color: "#888",
+  moreButton: {
+    padding: 4,
+  },
+  emptyContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 36,
+    gap: 8,
+  },
+  emptyCircle: {
+    backgroundColor: theme.colors.grey || "#E5E5EA",
+    padding: 16,
+    borderRadius: 999,
+    marginBottom: 4,
+  },
+  emptyMainText: {
+    fontFamily: theme.typography.fonts.regular,
+    fontSize: 18,
+    fontWeight: "600",
+    color: theme.colors.black,
+  },
+  emptySubText: {
+    color: "grey",
     fontSize: 14,
+    textAlign: "center",
+    paddingHorizontal: 32,
+  },
+  emptyText: {
+    color: "#8E8E93",
+    fontSize: 14,
+    textAlign: "center",
+    paddingVertical: 16,
   },
 });

@@ -40,7 +40,7 @@ export default function BookCard({ book }: BookCardProps) {
         </View>
 
         <View style={styles.info}>
-          <Text style={styles.cardTitle} numberOfLines={1}>
+          <Text adjustsFontSizeToFit style={styles.cardTitle} numberOfLines={2}>
             {book?.title}
           </Text>
           {book.subTitle && (
@@ -56,20 +56,11 @@ export default function BookCard({ book }: BookCardProps) {
 
 const styles = StyleSheet.create({
   shadowWrapper: {
-    // 1. Give it a percentage width so two cards fit side-by-side safely
     width: "48%",
     backgroundColor: "#FFFFFF",
     borderRadius: 16,
-    marginBottom: 16,
-
-    // iOS Shadow Properties
-    shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06, // Slightly lower opacity looks cleaner when scaled down
-    shadowRadius: 10,
-
-    // Android Shadow Property
-    elevation: 3,
+    borderColor: "#f0f0f0",
+    borderWidth: 1,
   },
   cardInner: {
     borderRadius: 16,
@@ -78,10 +69,10 @@ const styles = StyleSheet.create({
   },
   imageContainer: {
     width: "100%",
-    height: 130, // Scaled down the height slightly so it matches the narrower width aspect ratio
+    height: 130,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F5F5F7",
+    backgroundColor: "#ffffff",
   },
   coverImage: {
     width: "100%",
@@ -90,6 +81,8 @@ const styles = StyleSheet.create({
   info: {
     padding: 12,
     gap: 2,
+    borderTopColor: "#E5E5EA",
+    borderTopWidth: 1,
   },
   cardTitle: {
     fontSize: 15, // Slightly scaled down text sizes for 2-column balance

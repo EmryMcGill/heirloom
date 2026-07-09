@@ -1,8 +1,7 @@
 import { useAuth } from "@/contexts/AuthContext";
-import { Image } from "expo-image";
 import { Stack, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { StyleSheet, TouchableOpacity, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 
 export default function HomeLayout() {
   const router = useRouter();
@@ -17,22 +16,6 @@ export default function HomeLayout() {
           options={{
             title: "Spurdle",
             headerShown: true,
-            headerRight: () => (
-              <TouchableOpacity
-                style={styles.profileButton}
-                onPress={() => router.push("/home/profile")}
-              >
-                {profile?.avatar_url ? (
-                  <Image
-                    source={{ uri: `${profile.avatar_url}?t=${Date.now()}` }}
-                    style={styles.avatar}
-                    contentFit="cover"
-                  />
-                ) : (
-                  <View style={styles.placeholder} />
-                )}
-              </TouchableOpacity>
-            ),
           }}
         />
         <Stack.Screen name="cookBook" options={{ headerShown: false }} />
