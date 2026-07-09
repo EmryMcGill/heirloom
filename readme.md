@@ -2,10 +2,9 @@ in progress:
 
 todo:
 
-- book page styles
-- cancel friend request
 - change username
 - change password
+- stats on profile
 - ability to add recipe to book
 - options for add recipe from book
 - edit book

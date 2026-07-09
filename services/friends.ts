@@ -59,9 +59,10 @@ export const getFriendRequests = async (userId: string) => {
 };
 
 export const getOutgoingRequests = async (userId: string) => {
+  // 🛠️ Fixed: Now fetching 'id' alongside 'receiver_id'
   const { data, error } = await supabase
     .from("friendships")
-    .select("receiver_id")
+    .select("id, receiver_id")
     .eq("requester_id", userId)
     .eq("status", 0);
 
@@ -82,6 +83,7 @@ export const acceptFriendRequest = async (id: number) => {
 };
 
 export const declineFriendRequest = async (id: string) => {
+  console.log("remove request", id);
   const { error } = await supabase.from("friendships").delete().eq("id", id);
 
   if (error) throw error;

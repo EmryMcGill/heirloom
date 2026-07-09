@@ -344,7 +344,7 @@ const styles = StyleSheet.create({
   // Recipe list
   listWrap: {
     gap: 2,
-    backgroundColor: "grey",
+    backgroundColor: "#f6f6f6",
     marginTop: 0,
   },
   recipeRow: {},

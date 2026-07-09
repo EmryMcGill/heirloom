@@ -10,13 +10,15 @@ import {
   sendFriendRequest,
 } from "@/services/friends";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Stack, useRouter } from "expo-router"; // Imported Stack for native header config
+import { Stack, useRouter } from "expo-router";
 import {
+  Check,
   ChevronLeft,
   MoreHorizontal,
   Search,
   UserPlus,
   Users,
+  X,
 } from "lucide-react-native";
 import React, { useState } from "react";
 import {
@@ -42,7 +44,6 @@ export default function FriendsScreen() {
   const queryClient = useQueryClient();
 
   const [search, setSearch] = useState("");
-  const [sentRequests, setSentRequests] = useState<string[]>([]);
 
   // 🔹 Friends Queries
   const { data: friends = [] } = useQuery({
@@ -85,29 +86,73 @@ export default function FriendsScreen() {
     },
   });
 
+  // 🛠️ Pure Optimistic Cancel Mutation
+  const cancelMutation = useMutation({
+    mutationFn: declineFriendRequest,
+    onMutate: async (requestId: number) => {
+      await queryClient.cancelQueries({ queryKey: ["outgoingRequests"] });
+
+      queryClient.setQueryData(
+        ["outgoingRequests"],
+        (oldData: any[] | undefined) => {
+          if (!oldData) return [];
+          return oldData.filter((req) => Number(req.id) !== Number(requestId));
+        },
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["outgoingRequests"] });
+    },
+  });
+
+  // 🛠️ Pure Optimistic Send Mutation
   const sendMutation = useMutation({
     mutationFn: (receiverId: string) => sendFriendRequest(userId!, receiverId),
-    onSuccess: (_, receiverId) => {
-      setSentRequests((prev) => [...prev, receiverId]);
+    onMutate: async (receiverId) => {
+      await queryClient.cancelQueries({ queryKey: ["outgoingRequests"] });
+      const tempId = Date.now();
+
+      queryClient.setQueryData(
+        ["outgoingRequests"],
+        (oldData: any[] | undefined) => {
+          const previousData = oldData ?? [];
+          return [...previousData, { id: tempId, receiver_id: receiverId }];
+        },
+      );
+
+      return { tempId };
+    },
+    onSuccess: (data, receiverId, context) => {
+      queryClient.setQueryData(
+        ["outgoingRequests"],
+        (oldData: any[] | undefined) => {
+          if (!oldData) return [];
+          return oldData.map((req) =>
+            req.id === context?.tempId
+              ? { id: data.id, receiver_id: receiverId }
+              : req,
+          );
+        },
+      );
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["outgoingRequests"] });
     },
   });
 
   return (
     <View style={styles.container}>
-      {/* 🛠️ NATIVE HEADER CONFIGURATION (Matches NewRecipe Style) */}
       <Stack.Screen
         options={{
           headerShown: true,
           title: "Friends",
           headerTitleStyle: {
             fontFamily: theme.typography.fonts.regular,
-            fontSize: 20,
+            fontSize: 24,
             fontWeight: "600",
             color: theme.colors.black,
           },
-          headerStyle: {
-            backgroundColor: "#ffffff",
-          },
+          headerStyle: { backgroundColor: "#ffffff" },
           headerShadowVisible: true,
           headerLeft: () => (
             <TouchableOpacity
@@ -120,7 +165,6 @@ export default function FriendsScreen() {
         }}
       />
 
-      {/* Search Input Bar (Spaced cleanly below native header) */}
       <View style={styles.searchWrap}>
         <Search size={18} color="#999" style={styles.searchIcon} />
         <TextInput
@@ -149,9 +193,15 @@ export default function FriendsScreen() {
                     results.map((user: Profile, idx) => {
                       if (user.id === userId) return null;
 
-                      const isRequested =
-                        sentRequests.includes(user.id) ||
-                        outgoing.some((r) => r.receiver_id === user.id);
+                      // 🛠️ Check if they are ALREADY a friend
+                      const isAlreadyFriend = friends.some(
+                        (f: any) => f.id === user.id,
+                      );
+
+                      // Check if a request is pending outgoing
+                      const activeRequest = outgoing.find(
+                        (r: any) => r.receiver_id === user.id,
+                      );
 
                       return (
                         <View
@@ -162,10 +212,29 @@ export default function FriendsScreen() {
                           ]}
                         >
                           <Text style={styles.name}>{user.full_name}</Text>
-                          {isRequested ? (
-                            <View style={styles.requestedBadge}>
-                              <Text style={styles.requestedText}>Sent</Text>
+
+                          {/* 🛠️ Conditional Action Rendering */}
+                          {isAlreadyFriend ? (
+                            <View style={styles.friendsBadge}>
+                              <Check size={14} color="#555555" />
+                              <Text style={styles.friendsBadgeText}>
+                                Friends
+                              </Text>
                             </View>
+                          ) : activeRequest ? (
+                            <TouchableOpacity
+                              style={styles.requestedBtn}
+                              onPress={() => {
+                                if (activeRequest.id) {
+                                  cancelMutation.mutate(
+                                    Number(activeRequest.id),
+                                  );
+                                }
+                              }}
+                            >
+                              <Text style={styles.requestedText}>Sent</Text>
+                              <X size={12} color="#8E8E8E" />
+                            </TouchableOpacity>
                           ) : (
                             <TouchableOpacity
                               style={styles.addBtn}
@@ -196,7 +265,6 @@ export default function FriendsScreen() {
                       <Text style={styles.name}>
                         {req?.requester?.full_name ?? "Unknown user"}
                       </Text>
-                      {/* 🛠️ Redesigned text-based buttons */}
                       <View style={styles.actions}>
                         <TouchableOpacity
                           style={styles.declineTextButton}
@@ -254,21 +322,14 @@ export default function FriendsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    paddingHorizontal: 16,
-  },
+  container: { flex: 1, paddingHorizontal: 16 },
   searchWrap: {
     position: "relative",
     justifyContent: "center",
     marginBottom: 20,
     marginTop: 16,
   },
-  searchIcon: {
-    position: "absolute",
-    left: 12,
-    zIndex: 2,
-  },
+  searchIcon: { position: "absolute", left: 12, zIndex: 2 },
   searchInput: {
     padding: 10,
     paddingLeft: 38,
@@ -279,9 +340,7 @@ const styles = StyleSheet.create({
     borderColor: "#c1c1c1",
     backgroundColor: "#FFFFFF",
   },
-  section: {
-    marginBottom: 24,
-  },
+  section: { marginBottom: 24 },
   sectionTitle: {
     fontSize: 12,
     fontWeight: "600",
@@ -306,37 +365,17 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderColor: "#E5E5EA",
   },
-  name: {
-    fontSize: 16,
-    fontWeight: "500",
-    color: theme.colors.black,
-  },
-  actions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  /* 🔹 New Action Buttons Styles */
+  name: { fontSize: 16, fontWeight: "500", color: theme.colors.black },
+  actions: { flexDirection: "row", alignItems: "center", gap: 12 },
   acceptTextButton: {
     backgroundColor: theme.colors.black,
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 8,
   },
-  acceptButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#FFFFFF",
-  },
-  declineTextButton: {
-    paddingHorizontal: 6,
-    paddingVertical: 6,
-  },
-  declineButtonText: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#666666",
-  },
+  acceptButtonText: { fontSize: 14, fontWeight: "600", color: "#FFFFFF" },
+  declineTextButton: { paddingHorizontal: 6, paddingVertical: 6 },
+  declineButtonText: { fontSize: 14, fontWeight: "500", color: "#666666" },
   addBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -346,25 +385,31 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 999,
   },
-  addText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: theme.colors.black,
-  },
-  requestedBadge: {
+  addText: { fontSize: 13, fontWeight: "600", color: theme.colors.black },
+  requestedBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     backgroundColor: "#E5E5EA",
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 999,
   },
-  requestedText: {
-    color: "#8E8E93",
-    fontSize: 13,
-    fontWeight: "500",
+  requestedText: { color: "#555555", fontSize: 13, fontWeight: "600" },
+  /* 🛠️ Styled Badge for confirmed friends */
+  friendsBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#EAF9EA",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#B2E3B2",
   },
-  moreButton: {
-    padding: 4,
-  },
+  friendsBadgeText: { color: "#2E7D32", fontSize: 13, fontWeight: "600" },
+  moreButton: { padding: 4 },
   emptyContainer: {
     alignItems: "center",
     justifyContent: "center",
