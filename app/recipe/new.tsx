@@ -77,7 +77,7 @@ export default function NewRecipeScreen() {
 
   // Dynamically pad the scroll content frame-by-frame as the keyboard moves
   const animatedPaddingStyle = useAnimatedStyle(() => ({
-    paddingBottom: 140 + keyboardHeight.value,
+    paddingBottom: 320 + keyboardHeight.value,
   }));
 
   const scrollFieldToTop = (key: string) => {
@@ -492,7 +492,7 @@ export default function NewRecipeScreen() {
                     style={[
                       styles.boxInput,
                       styles.dynamicInput,
-                      styles.textAreaInput,
+                      // styles.textAreaInput,
                     ]}
                     value={step}
                     onChangeText={(val) => updateStep(index, val)}
