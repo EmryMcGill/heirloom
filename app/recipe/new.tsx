@@ -353,9 +353,6 @@ export default function NewRecipeScreen() {
               onFocus={() => scrollFieldToTop("title")}
               placeholder="e.g., Grandma's Chocolate Chip Cookies"
               placeholderTextColor="#8E8E93"
-              returnKeyType="next"
-              onSubmitEditing={() => descriptionRef.current?.focus()}
-              blurOnSubmit={false}
             />
           </View>
 
@@ -394,9 +391,6 @@ export default function NewRecipeScreen() {
                 onFocus={() => scrollFieldToTop("metrics")}
                 placeholder="15 mins"
                 placeholderTextColor="#8E8E93"
-                returnKeyType="next"
-                onSubmitEditing={() => cookTimeRef.current?.focus()}
-                blurOnSubmit={false}
               />
             </View>
             <View style={styles.metricItem}>
@@ -409,9 +403,6 @@ export default function NewRecipeScreen() {
                 onFocus={() => scrollFieldToTop("metrics")}
                 placeholder="30 mins"
                 placeholderTextColor="#8E8E93"
-                returnKeyType="next"
-                onSubmitEditing={() => servingsRef.current?.focus()}
-                blurOnSubmit={false}
               />
             </View>
             <View style={styles.metricItem}>
@@ -425,9 +416,6 @@ export default function NewRecipeScreen() {
                 placeholder="4"
                 placeholderTextColor="#8E8E93"
                 keyboardType="numeric"
-                returnKeyType="next"
-                onSubmitEditing={() => ingredientRefs.current[0]?.focus()}
-                blurOnSubmit={false}
               />
             </View>
           </View>
@@ -458,15 +446,6 @@ export default function NewRecipeScreen() {
                     onFocus={() => scrollFieldToTop(`ingredient_${index}`)}
                     placeholder={`Ingredient ${index + 1}`}
                     placeholderTextColor="#8E8E93"
-                    returnKeyType="next"
-                    onSubmitEditing={() => {
-                      if (index < ingredients.length - 1) {
-                        ingredientRefs.current[index + 1]?.focus();
-                      } else {
-                        stepRefs.current[0]?.focus();
-                      }
-                    }}
-                    blurOnSubmit={false}
                   />
                   {ingredients.length > 1 && (
                     <TouchableOpacity
