@@ -1,6 +1,8 @@
 import { theme } from "@/constants/theme";
 import { useAuth } from "@/contexts/AuthContext";
+import { getBooks } from "@/services/books";
 import { getFriendRequests } from "@/services/friends"; // 🔹 Imported your friends service
+import { getRecipesByUserId } from "@/services/recipes";
 import { useQuery } from "@tanstack/react-query"; // 🔹 Swapped useQueryClient for an active useQuery hook
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
@@ -13,11 +15,25 @@ export default function ProfileModal() {
   const { profile, logout } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const userId = profile?.id;
+  const { session } = useAuth();
+  const userId = session?.user?.id;
+
+  const { data: recipes = [] } = useQuery({
+    queryKey: ["recipes", userId],
+    queryFn: () => getRecipesByUserId(userId as string),
+    enabled: !!userId,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+
+  const { data: books = [] } = useQuery({
+    queryKey: ["books"],
+    queryFn: () => getBooks(userId),
+    staleTime: 1000 * 60 * 10,
+  });
 
   // TODO: Replace these with your actual fetched counts or context properties
-  const booksCount = profile?.books_count ?? 0;
-  const recipesCount = profile?.recipes_count ?? 0;
+  const booksCount = books.length;
+  const recipesCount = recipes.length;
 
   // 🔹 Actively listens to the same friendRequests cache key used on the friends screen
   const { data: requests = [] } = useQuery({
@@ -55,12 +71,12 @@ export default function ProfileModal() {
           {/* 📊 Books and Recipes Count Row */}
           <View style={styles.statsRow}>
             <Text style={styles.statText}>
-              <Text style={styles.statNumber}>{booksCount}</Text>{" "}
+              <Text style={styles.statNumber}>{booksCount} </Text>
               {booksCount === 1 ? "cookbook" : "cookbooks"}
             </Text>
             <View style={styles.statDivider} />
             <Text style={styles.statText}>
-              <Text style={styles.statNumber}>{recipesCount}</Text>{" "}
+              <Text style={styles.statNumber}>{recipesCount} </Text>
               {recipesCount === 1 ? "recipe" : "recipes"}
             </Text>
           </View>

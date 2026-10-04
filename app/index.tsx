@@ -1,5 +1,5 @@
-import { useRouter } from "expo-router";
-import { useEffect } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { Href, useRouter } from "expo-router";
 import {
   ImageBackground,
   Pressable,
@@ -8,26 +8,24 @@ import {
   Text,
 } from "react-native";
 import { theme } from "../constants/theme";
-import { useAuth } from "../contexts/AuthContext";
 
 export default function WelcomeScreen() {
   const router = useRouter();
-  const { session } = useAuth();
 
-  // If user is already logged in, redirect to app
-  useEffect(() => {
-    if (session) {
-      router.replace("/(tabs)/home");
-    }
-  }, [session]);
+  const { session, isLoading } = useAuth();
+
+  // If session exists, render nothing while Root Layout executes router.replace("/(tabs)")
+  if (isLoading || session) {
+    return null;
+  }
 
   return (
     <ImageBackground
       source={require("../assets/images/mobile-img.png")}
-      resizeMode="cover"
+      imageStyle={{ resizeMode: "cover" }}
       style={styles.background}
     >
-      <StatusBar style="light" />
+      <StatusBar />
       <Text style={styles.title}>
         The <Text style={styles.italic}>shared</Text> kitchen for the people you
         <Text style={styles.italic}> love</Text>.
@@ -37,7 +35,7 @@ export default function WelcomeScreen() {
           styles.button,
           pressed && styles.buttonPressed,
         ]}
-        onPress={() => router.replace("/(auth)/auth")}
+        onPress={() => router.push("/auth" as Href)}
       >
         <Text style={styles.buttonText}>Start your heirloom</Text>
       </Pressable>
@@ -73,7 +71,7 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: theme.colors.darkRed,
-    fontWeight: 600,
+    fontWeight: "600",
     fontSize: theme.typography.sizes.md,
   },
 });

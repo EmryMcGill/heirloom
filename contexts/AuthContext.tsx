@@ -12,6 +12,11 @@ type AuthContextType = {
   isLoading: boolean;
   profile: Profile | null;
   refreshProfile: (userId: string) => Promise<void>;
+  updateProfile: (updates: {
+    full_name?: string;
+    avatar_url?: string;
+  }) => Promise<void>;
+  updatePassword: (newPassword: string) => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -20,6 +25,8 @@ const AuthContext = createContext<AuthContextType>({
   isLoading: true,
   profile: null,
   refreshProfile: async () => {},
+  updateProfile: async () => {},
+  updatePassword: async () => {},
   logout: async () => {},
 });
 
@@ -69,13 +76,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await fetchProfile(userId);
   };
 
+  // 🔹 Update user profile fields (like full_name) in Supabase table
+  const updateProfile = async (updates: {
+    full_name?: string;
+    avatar_url?: string;
+  }) => {
+    if (!session?.user) throw new Error("No active session found.");
+
+    const { error } = await supabase
+      .from("profiles")
+      .update(updates)
+      .eq("id", session.user.id);
+
+    if (error) throw error;
+
+    // Refresh local profile state
+    await fetchProfile(session.user.id);
+  };
+
+  // 🔹 Update user password using Supabase Auth
+  const updatePassword = async (newPassword: string) => {
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+
+    if (error) throw error;
+  };
+
   const logout = async () => {
     await supabase.auth.signOut();
   };
 
   return (
     <AuthContext.Provider
-      value={{ session, isLoading, profile, refreshProfile, logout }}
+      value={{
+        session,
+        isLoading,
+        profile,
+        refreshProfile,
+        updateProfile,
+        updatePassword,
+        logout,
+      }}
     >
       {children}
     </AuthContext.Provider>

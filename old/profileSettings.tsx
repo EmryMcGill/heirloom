@@ -215,7 +215,7 @@ export default function ProfileSettingsScreen() {
             activeOpacity={0.8}
             onPress={async () => {
               await logout();
-              router.replace("/auth/login"); // Redirects securely to authentication stack roots
+              router.replace("/auth"); // Redirects securely to authentication stack roots
             }}
           >
             <LogOut size={18} color={theme.colors.darkRed || "#FF3B30"} />

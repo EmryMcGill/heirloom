@@ -11,16 +11,19 @@ export const colors = {
   green: "#9A8A58",
   darkGreen: "#494019",
   beige: "#F1E9DA",
+  beige2: "#D9D3C5",
   darkBeige: "#D8D1A3",
   blue: "#ADC6C3",
   black: "#18171C",
   grey: "#F0F1E7",
 
+  bg: "#f9f4ee",
+  primary: "#684623",
+  secondary: "#606344",
+
   text: {
-    primary: "#1A1A1A",
-    secondary: "#666666",
-    tertiary: "#999999",
-    inverse: "#FFFFFF",
+    primary: "#252222",
+    secondary: "#615d5d",
   },
 };
 

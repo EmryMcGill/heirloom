@@ -1,14 +1,11 @@
 import BookCard from "@/components/BookCard";
 import Divider from "@/components/Divider";
-import LoadingOverlay from "@/components/LoadingOverlay";
 import ScrollPage from "@/components/ScrollPage";
 import { theme } from "@/constants/theme";
 import { useAuth } from "@/contexts/AuthContext";
-import { getBooks } from "@/services/books";
-import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 // FIX 1: Added Book to the lucide imports
-import { Book, Plus } from "lucide-react-native";
+import { Book, LogOut, Plus } from "lucide-react-native";
 import React, { useState } from "react";
 import {
   StyleSheet,
@@ -21,24 +18,11 @@ import {
 export default function CookbookShelf() {
   const router = useRouter();
 
-  const image = require("../../../assets/images/pattern1.png");
-  const { session } = useAuth();
+  const { session, logout } = useAuth();
   const userId = session?.user?.id;
   const [searchQuery, setSearchQuery] = useState("");
-
-  const { data: books = [], isLoading } = useQuery({
-    queryKey: ["books"],
-    queryFn: () => getBooks(userId),
-    staleTime: 1000 * 60 * 10,
-  });
-
-  const filteredBooks = books.filter((book) =>
-    book.title.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
-
-  if (isLoading) {
-    return <LoadingOverlay visible={true} mode="full" />;
-  }
+  const [books, setBooks] = useState([]);
+  const [filteredBooks, setFilteredBooks] = useState([]);
 
   return (
     <ScrollPage>
@@ -99,6 +83,18 @@ export default function CookbookShelf() {
       <View style={{ width: "100%", alignItems: "center" }}>
         <Divider />
       </View>
+
+      <TouchableOpacity
+        style={styles.logoutButton}
+        activeOpacity={0.8}
+        onPress={async () => {
+          await logout();
+          router.replace("/auth"); // Redirects securely to authentication stack roots
+        }}
+      >
+        <LogOut size={18} color={theme.colors.darkRed || "#FF3B30"} />
+        <Text style={styles.logoutText}>Log Out Account</Text>
+      </TouchableOpacity>
 
       {books.length === 0 && (
         <View style={styles.noBookContainer}>

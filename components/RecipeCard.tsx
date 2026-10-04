@@ -1,13 +1,8 @@
 import { theme } from "@/constants/theme";
 import { useAuth } from "@/contexts/AuthContext";
 import { Recipe } from "@/models/recipe";
-import {
-  deleteSavedRecipeForUser,
-  saveRecipeForUser,
-} from "@/services/recipes";
 import { useQueryClient } from "@tanstack/react-query";
 import { Image } from "expo-image";
-import { router } from "expo-router";
 import { Bookmark, Clock, NotebookText } from "lucide-react-native";
 import React, { useEffect, useState } from "react";
 import {
@@ -45,9 +40,9 @@ export default function RecipeCard({ recipe }: RecipeCardProps) {
 
     try {
       if (nextSaved) {
-        await saveRecipeForUser(recipe.id, userId);
+        // await saveRecipeForUser(recipe.id, userId);
       } else {
-        await deleteSavedRecipeForUser(recipe.id, userId);
+        // await deleteSavedRecipeForUser(recipe.id, userId);
       }
       await queryClient.invalidateQueries({
         predicate: (query) => query.queryKey[0] === "recipes",
@@ -63,11 +58,11 @@ export default function RecipeCard({ recipe }: RecipeCardProps) {
   return (
     <TouchableOpacity
       style={styles.card}
-      onPress={() =>
-        router.push(
-          `/shared/recipePage?recipe=${encodeURIComponent(JSON.stringify(recipe))}`,
-        )
-      }
+      // onPress={() =>
+      //   router.push(
+      //     `/shared/recipePage?recipe=${encodeURIComponent(JSON.stringify(recipe))}`,
+      //   )
+      // }
     >
       <View
         style={[

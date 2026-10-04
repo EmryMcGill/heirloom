@@ -5,88 +5,58 @@ import {
   GentiumPlus_700Bold_Italic,
   useFonts,
 } from "@expo-google-fonts/gentium-plus";
-import {
-  QueryClient,
-  QueryClientProvider,
-  useQueryClient,
-} from "@tanstack/react-query";
-import { Stack, usePathname, useRouter } from "expo-router";
+import { Pacifico_400Regular } from "@expo-google-fonts/pacifico";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Href, Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { AuthProvider, useAuth } from "../contexts/AuthContext";
-import { getRecipesByUserId } from "../services/recipes";
 
-// Prevent splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync();
 
 function RootLayoutNav() {
   const { session, isLoading } = useAuth();
-  const pathname = usePathname();
+  const segments = useSegments();
   const router = useRouter();
-  const queryClient = useQueryClient();
-  const [recipesReady, setRecipesReady] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
 
   const [fontsLoaded] = useFonts({
     GentiumPlus_400Regular,
     GentiumPlus_400Regular_Italic,
     GentiumPlus_700Bold,
     GentiumPlus_700Bold_Italic,
+    Pacifico_400Regular,
   });
 
   useEffect(() => {
-    if (fontsLoaded) {
-      SplashScreen.hideAsync();
-    }
-  }, [fontsLoaded]);
+    setIsMounted(true);
+  }, []);
 
+  const isReady = isMounted && !isLoading && fontsLoaded;
+
+  // Auth Routing Guard & Splash Screen Dismissal
   useEffect(() => {
-    let isActive = true;
+    if (!isReady) return;
 
-    const bootstrapRecipes = async () => {
-      const userId = session?.user?.id;
+    const inAuthRoute = segments[0] === "auth";
+    const inTabsGroup = segments[0] === "(tabs)";
 
-      if (!userId) {
-        setRecipesReady(true);
-        return;
+    const timer = setTimeout(async () => {
+      if (!session && inTabsGroup) {
+        router.replace("/" as Href);
+      } else if (session && (inAuthRoute || segments[0] === undefined)) {
+        router.replace("/(tabs)" as Href);
       }
 
-      setRecipesReady(false);
+      // Hide splash screen AFTER redirect is executed to prevent screen flashing
+      await SplashScreen.hideAsync();
+    }, 10);
 
-      await queryClient.prefetchQuery({
-        queryKey: ["recipes", userId],
-        queryFn: () => getRecipesByUserId(userId),
-        staleTime: 1000 * 60 * 5,
-      });
+    return () => clearTimeout(timer);
+  }, [session, segments, isReady]);
 
-      if (isActive) {
-        setRecipesReady(true);
-      }
-    };
-
-    if (!isLoading && fontsLoaded) {
-      void bootstrapRecipes();
-    }
-
-    return () => {
-      isActive = false;
-    };
-  }, [session?.user?.id, isLoading, fontsLoaded, queryClient]);
-
-  useEffect(() => {
-    if (isLoading || !fontsLoaded || !recipesReady) return;
-
-    const isAuthRoute = pathname === "/auth";
-    const isWelcomeRoute = pathname === "/" || pathname === "/index";
-
-    if (!session && !isAuthRoute && !isWelcomeRoute) {
-      router.replace("/");
-    } else if (session && (isAuthRoute || isWelcomeRoute)) {
-      router.replace("/(tabs)/home");
-    }
-  }, [session, pathname, isLoading, fontsLoaded, recipesReady]);
-
-  if (isLoading || !fontsLoaded || !recipesReady) {
+  if (!isReady) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#FF6B6B" />
@@ -96,10 +66,55 @@ function RootLayoutNav() {
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
+      {/* Root & Auth Routes */}
+      <Stack.Screen name="index" />
+      <Stack.Screen name="auth" />
+
+      {/* Main Tabs Group */}
       <Stack.Screen name="(tabs)" />
+
+      {/* Recipe Stack Routes */}
+      <Stack.Screen name="recipe/new" />
+      <Stack.Screen name="recipe/[id]" />
+
+      {/* Book Stack Routes */}
+      <Stack.Screen name="book/new" />
+      <Stack.Screen name="book/[id]" />
+
+      <Stack.Screen
+        name="add-to-book-modal"
+        options={{
+          presentation: "modal",
+          headerShown: false,
+        }}
+      />
+
+      <Stack.Screen
+        name="manage-book-recipes-modal"
+        options={{
+          presentation: "modal",
+          headerShown: false,
+        }}
+      />
+
+      <Stack.Screen
+        name="add-book-member-modal"
+        options={{
+          presentation: "modal",
+          headerShown: false,
+        }}
+      />
+
+      <Stack.Screen
+        name="importRecipe"
+        options={{
+          headerShown: false,
+        }}
+      />
     </Stack>
   );
 }
+
 const queryClient = new QueryClient();
 
 export default function RootLayout() {

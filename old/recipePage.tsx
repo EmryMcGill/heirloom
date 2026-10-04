@@ -1,8 +1,11 @@
 import Divider from "@/components/Divider";
 import { theme } from "@/constants/theme";
+import { supabase } from "@/lib/supabase";
+import { Book as BookModel } from "@/models/book";
 import { Comment } from "@/models/comments";
+import { getBooks } from "@/services/books";
 import { saveComment } from "@/services/comments";
-import { deleteRecipe } from "@/services/recipes";
+import { deleteRecipe, saveRecipe } from "@/services/recipes";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
@@ -14,13 +17,15 @@ import {
   MoreHorizontal,
   Users,
 } from "lucide-react-native";
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActionSheetIOS,
   Alert,
   Animated,
+  Dimensions,
   Image,
   Keyboard,
+  Modal,
   Pressable,
   StyleSheet,
   Text,
@@ -32,6 +37,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const HERO_HEIGHT = 220;
 const STICKY_BAR_HEIGHT = 56;
+const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 export default function RecipePage() {
   const router = useRouter();
@@ -46,11 +52,79 @@ export default function RecipePage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showStory, setShowStory] = useState(false);
   const [newComment, setNewComment] = useState("");
+  const [showBookPicker, setShowBookPicker] = useState(false);
+  const [availableBooks, setAvailableBooks] = useState<Partial<BookModel>[]>(
+    [],
+  );
+  const [selectedBookIds, setSelectedBookIds] = useState<number[]>([]);
+  const [isSavingBookSelection, setIsSavingBookSelection] = useState(false);
 
   const scrollViewRef = useRef<any>(null);
   const scrollY = useRef(new Animated.Value(0)).current;
 
+  // Track vertical translation for smooth sheet exit animations
+  const sheetTranslateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const [commentSectionY, setCommentSectionY] = useState(0);
+
+  useEffect(() => {
+    if (showBookPicker) {
+      Animated.timing(sheetTranslateY, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      Animated.timing(sheetTranslateY, {
+        toValue: SCREEN_HEIGHT,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [showBookPicker, sheetTranslateY]);
+
+  const closeBookPicker = () => {
+    Animated.timing(sheetTranslateY, {
+      toValue: SCREEN_HEIGHT,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => {
+      setShowBookPicker(false);
+    });
+  };
+
+  useEffect(() => {
+    if (!recipe?.id) return;
+
+    const activeBookIds = Array.isArray(recipe?.books)
+      ? recipe.books
+          .map((book: any) => book?.id ?? book?.book_id)
+          .filter(Boolean)
+          .map((id: string | number) => Number(id))
+      : recipe?.book?.id
+        ? [Number(recipe.book.id)]
+        : [];
+
+    setSelectedBookIds(activeBookIds);
+  }, [recipe?.id, recipe?.book?.id, recipe?.books]);
+
+  useEffect(() => {
+    const loadBooks = async () => {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (!user?.id) return;
+
+        const books = await getBooks(user.id);
+        setAvailableBooks((books as Partial<BookModel>[]) ?? []);
+      } catch (error) {
+        console.error("Failed to load cookbooks", error);
+      }
+    };
+
+    loadBooks();
+  }, []);
 
   const getDisplayName = (value: unknown) => {
     if (typeof value === "string") return value;
@@ -91,26 +165,85 @@ export default function RecipePage() {
     );
   };
 
+  const openBookPicker = () => {
+    setShowBookPicker(true);
+  };
+
+  const handleSaveBookSelection = async () => {
+    if (!recipe?.id) return;
+
+    try {
+      setIsSavingBookSelection(true);
+
+      const normalizedIngredients = Array.isArray(recipe?.ingredients)
+        ? recipe.ingredients
+        : typeof recipe?.ingredients === "string"
+          ? [recipe.ingredients]
+          : [];
+
+      const normalizedSteps = Array.isArray(recipe?.steps)
+        ? recipe.steps
+        : typeof recipe?.steps === "string"
+          ? [recipe.steps]
+          : [];
+
+      const payload = {
+        id: Number(recipe.id),
+        title: recipe?.title ?? "",
+        description: recipe?.description ?? "",
+        story: recipe?.story ?? "",
+        prep_time: Number(recipe?.prep_time ?? 0),
+        cook_time: Number(recipe?.cook_time ?? 0),
+        servings: Number(recipe?.servings ?? 1),
+        image_url: recipe?.image_url ?? "",
+        tags: typeof recipe?.tags === "string" ? recipe.tags : "[]",
+        notes: recipe?.notes ?? "",
+        ingredients: normalizedIngredients,
+        steps: normalizedSteps,
+        book_ids: selectedBookIds,
+      };
+
+      const updatedRecipe = await saveRecipe(payload);
+      setRecipe(updatedRecipe as any);
+      await queryClient.invalidateQueries({
+        predicate: (query) => query.queryKey[0] === "recipes",
+      });
+      closeBookPicker();
+      Alert.alert(
+        "Recipe updated",
+        "This recipe is now linked to your selected cookbooks.",
+      );
+    } catch (error) {
+      console.error("Failed to update recipe cookbooks", error);
+      Alert.alert("Update failed", "Could not update the selected cookbooks.");
+    } finally {
+      setIsSavingBookSelection(false);
+    }
+  };
+
   const showRecipeMenu = () => {
     ActionSheetIOS.showActionSheetWithOptions(
       {
         options: [
           "Cancel",
-          "Edit Recipe",
+          "Add recipe to cookbook",
+          "Edit recipe",
           "Make your version",
-          "Delete Recipe",
+          "Delete recipe",
         ],
-        destructiveButtonIndex: 3,
+        destructiveButtonIndex: 4,
         cancelButtonIndex: 0,
         title: "Recipe Options",
       },
       (buttonIndex) => {
         if (buttonIndex === 1) {
+          openBookPicker();
+        } else if (buttonIndex === 2) {
           router.push({
             pathname: "/shared/newRecipe",
             params: { recipe: encodeURIComponent(JSON.stringify(recipe)) },
           });
-        } else if (buttonIndex === 2) {
+        } else if (buttonIndex === 3) {
           router.push({
             pathname: "/shared/newRecipe",
             params: {
@@ -118,14 +251,13 @@ export default function RecipePage() {
               isClone: "true",
             },
           });
-        } else if (buttonIndex === 3) {
+        } else if (buttonIndex === 4) {
           handleDeleteRecipe();
         }
       },
     );
   };
 
-  // Evaluates ingredients to raw text line-breaks safely
   const ingredientsText = React.useMemo(() => {
     if (!recipe?.ingredients) return "";
     const raw = recipe.ingredients;
@@ -194,7 +326,7 @@ export default function RecipePage() {
 
   return (
     <View style={styles.container}>
-      {/* Sticky bar — fades in smoothly on scroll */}
+      {/* Sticky Top Bar */}
       <Animated.View
         style={[
           styles.stickyBar,
@@ -223,6 +355,97 @@ export default function RecipePage() {
         </View>
       </Animated.View>
 
+      {/* Cookbook Selection Bottom Sheet Modal */}
+      <Modal
+        visible={showBookPicker}
+        transparent={true}
+        animationType="fade"
+        statusBarTranslucent={true}
+        hardwareAccelerated={true}
+        onRequestClose={closeBookPicker}
+      >
+        <View style={styles.modalOverlay}>
+          {/* Backdrop pressable fills the background */}
+          <Pressable
+            style={styles.backdropPressable}
+            onPress={closeBookPicker}
+          />
+
+          {/* Sliding sheet element */}
+          <Animated.View
+            style={[
+              styles.sheetContainer,
+              {
+                paddingBottom: insets.bottom + 20,
+                transform: [{ translateY: sheetTranslateY }],
+              },
+            ]}
+          >
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <View>
+                <Text style={styles.sheetTitle}>Add to cookbooks</Text>
+              </View>
+              <TouchableOpacity
+                onPress={handleSaveBookSelection}
+                disabled={isSavingBookSelection}
+              >
+                <Text style={styles.sheetActionText}>
+                  {isSavingBookSelection ? "Saving..." : "Done"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {availableBooks.length === 0 ? (
+              <Text style={styles.emptyBookText}>
+                You have no cookbooks yet. Create one first and then come back.
+              </Text>
+            ) : (
+              <View style={styles.bookList}>
+                {availableBooks.map((book) => {
+                  const isSelected = selectedBookIds.includes(Number(book.id));
+
+                  return (
+                    <TouchableOpacity
+                      key={book.id}
+                      style={styles.bookOptionRow}
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        const nextIds = isSelected
+                          ? selectedBookIds.filter(
+                              (id) => id !== Number(book.id),
+                            )
+                          : [...selectedBookIds, Number(book.id)];
+                        setSelectedBookIds(nextIds);
+                      }}
+                    >
+                      <View
+                        style={[
+                          styles.checkbox,
+                          isSelected && styles.checkboxSelected,
+                        ]}
+                      >
+                        {isSelected ? (
+                          <View style={styles.checkboxInner} />
+                        ) : null}
+                      </View>
+                      <View style={styles.bookOptionTextWrap}>
+                        <Text style={styles.bookOptionTitle}>{book.title}</Text>
+                        {!!book.description && (
+                          <Text style={styles.bookOptionDescription}>
+                            {book.description}
+                          </Text>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+          </Animated.View>
+        </View>
+      </Modal>
+
       <Animated.ScrollView
         ref={scrollViewRef}
         onScroll={Animated.event(
@@ -238,7 +461,7 @@ export default function RecipePage() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Media Layer — fades out cleanly on scroll */}
+        {/* Media Hero Layer */}
         <Animated.View style={[styles.hero, { opacity: heroOpacity }]}>
           {recipe?.image_url ? (
             <Image
@@ -267,17 +490,17 @@ export default function RecipePage() {
           </View>
         </Animated.View>
 
-        {/* Content Body Container */}
+        {/* Recipe Content */}
         <View style={styles.mainContentBlock}>
           <Text style={styles.authorTag}>
             By {getDisplayName(recipe?.owner?.full_name)}
           </Text>
           <Text style={styles.recipeTitle}>{recipe?.title}</Text>
-          {recipe.description ?? (
-            <Text style={styles.recipeDescription}>{recipe?.description}</Text>
+          {!!recipe?.description && (
+            <Text style={styles.recipeDescription}>{recipe.description}</Text>
           )}
 
-          {/* Clean Pill Metadata Tags */}
+          {/* Metadata Tags */}
           <View style={styles.tagWrapper}>
             <View style={styles.tag}>
               <Clock size={14} color="#555" />
@@ -299,7 +522,7 @@ export default function RecipePage() {
             )}
           </View>
 
-          {/* Collapsible Recipe Narrative */}
+          {/* Story Dropdown */}
           {recipe?.story && (
             <>
               <View style={styles.storySection}>
@@ -326,7 +549,7 @@ export default function RecipePage() {
             </>
           )}
 
-          {/* Ingredients Displayed Line-by-Line with Bullets */}
+          {/* Ingredients */}
           <Text style={styles.sectionHeader}>Ingredients</Text>
           <View style={styles.ingredientsContainer}>
             {ingredientsText ? (
@@ -353,7 +576,7 @@ export default function RecipePage() {
             )}
           </View>
 
-          {/* Structured Preparation Steps */}
+          {/* Steps */}
           <Text style={styles.sectionHeader}>Steps</Text>
           <View style={styles.stepsContainer}>
             {steps.map((step: string, index: number) => (
@@ -368,7 +591,7 @@ export default function RecipePage() {
 
           <Divider />
 
-          {/* Feed & Community Interactions */}
+          {/* Comments Section */}
           <View
             style={styles.commentsSection}
             onLayout={(e) => setCommentSectionY(e.nativeEvent.layout.y)}
@@ -482,8 +705,102 @@ const styles = StyleSheet.create({
     backgroundColor: "#f4f4f2",
     overflow: "hidden",
   },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.4)",
+    justifyContent: "flex-end",
+  },
+  backdropPressable: {
+    ...StyleSheet.absoluteFill,
+  },
+  sheetContainer: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    maxHeight: "80%",
+  },
+  sheetHandle: {
+    width: 44,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: "#d8d8d2",
+    alignSelf: "center",
+    marginBottom: 12,
+  },
+  sheetHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  sheetTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#111",
+  },
+  sheetSubtitle: {
+    fontSize: 13,
+    color: "#666",
+    marginTop: 2,
+  },
+  sheetActionText: {
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  emptyBookText: {
+    paddingVertical: 16,
+    color: "#666",
+    fontSize: 14,
+  },
+  bookList: {
+    gap: 10,
+    paddingVertical: 4,
+  },
+  bookOptionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    backgroundColor: "#f7f6f2",
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 66,
+    borderWidth: 1.5,
+    borderColor: "#b8b4aa",
+    marginRight: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkboxSelected: {
+    borderColor: "#000000",
+    backgroundColor: "#000000",
+  },
+  checkboxInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 99,
+    backgroundColor: "#fff",
+  },
+  bookOptionTextWrap: {
+    flex: 1,
+  },
+  bookOptionTitle: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#222",
+  },
+  bookOptionDescription: {
+    fontSize: 12,
+    color: "#777",
+    marginTop: 2,
+  },
   heroFallbackWrap: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: "center",
     justifyContent: "center",
   },

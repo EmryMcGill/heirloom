@@ -1,90 +1,135 @@
 import { theme } from "@/constants/theme";
-import { useAuth } from "@/contexts/AuthContext";
-import FontAwesome from "@expo/vector-icons/FontAwesome";
-import { Tabs } from "expo-router";
-import { Bookmark, Library, NotebookText, User } from "lucide-react-native";
-import React from "react";
-import { StyleSheet } from "react-native";
+import { BlurView } from "expo-blur";
+import { router, Tabs } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import { BookOpen, Plus, User } from "lucide-react-native";
+import {
+  ActionSheetIOS,
+  Alert,
+  Platform,
+  StyleSheet,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-// You can explore the built-in icon families and icons on the web at https://icons.expo.fyi/
-function TabBarIcon(props: {
-  name: React.ComponentProps<typeof FontAwesome>["name"];
-  color: string;
-}) {
-  return <FontAwesome size={28} style={{ marginBottom: -3 }} {...props} />;
-}
+export default function TabsLayout() {
+  const insets = useSafeAreaInsets();
 
-export default function TabLayout() {
-  const { profile } = useAuth();
+  const bottomInset =
+    Platform.OS === "ios" ? (insets.bottom > 0 ? insets.bottom : 20) : 12;
+  const tabTabBarHeight = 50 + bottomInset;
+
+  const handlePress = () => {
+    const options = [
+      "Cancel",
+      "Create Recipe",
+      "Import from URL",
+      "Create Cookbook",
+    ];
+
+    if (Platform.OS === "ios") {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options,
+          cancelButtonIndex: 0,
+          title: "Create New",
+        },
+        (buttonIndex) => {
+          if (buttonIndex === 3) router.push("/book/new");
+          if (buttonIndex === 1) router.push("/recipe/new");
+          if (buttonIndex === 2) router.push("/importRecipe");
+        },
+      );
+    } else {
+      Alert.alert("Create New", "Choose an option to get started", [
+        { text: "Create Recipe", onPress: () => router.push("/recipe/new") },
+        {
+          text: "Import from URL",
+          onPress: () => router.push("/importRecipe"),
+        },
+        { text: "Create Cookbook", onPress: () => router.push("/book/new") },
+        { text: "Cancel", style: "cancel" },
+      ]);
+    }
+  };
 
   return (
-    <Tabs
-      screenOptions={{
-        tabBarShowLabel: false,
-        tabBarActiveTintColor: theme.colors.yellow,
-        tabBarInactiveTintColor: "black",
-        tabBarStyle: {
-          borderTopWidth: 1,
-        },
-        headerShown: false,
-      }}
-    >
-      <Tabs.Screen
-        name="home"
-        options={{
-          tabBarIcon: ({ color }) => <Library color={color} />,
-          title: "Spurdle",
+    <>
+      <StatusBar style="dark" />
+      <Tabs
+        screenOptions={{
+          headerShown: false,
+          tabBarActiveTintColor: theme.colors.black || "#000000",
+          tabBarInactiveTintColor: "#8E8E93",
+          tabBarStyle: {
+            position: "absolute",
+            backgroundColor: Platform.OS === "ios" ? "transparent" : "#FFFFFF",
+            elevation: 0,
+            height: tabTabBarHeight,
+            paddingBottom: bottomInset,
+            paddingTop: 8,
+          },
+          tabBarBackground: () =>
+            Platform.OS === "ios" ? (
+              <BlurView
+                tint="systemChromeMaterial"
+                intensity={100}
+                style={StyleSheet.absoluteFill}
+              />
+            ) : null,
+          tabBarLabelStyle: {
+            fontSize: 11,
+            fontWeight: "500",
+          },
         }}
-      />
-      <Tabs.Screen
-        name="allRecipes"
-        options={{
-          tabBarIcon: ({ color }) => <NotebookText color={color} />,
-          title: "Spurdle",
-          headerShown: true,
-        }}
-      />
-      <Tabs.Screen
-        name="savedRecipes"
-        options={{
-          tabBarIcon: ({ color }) => <Bookmark color={color} />,
-          title: "Spurdle",
-          headerShown: true,
-        }}
-      />
+      >
+        {/* 1. Library Tab */}
+        <Tabs.Screen
+          name="index"
+          options={{
+            title: "Library",
+            tabBarIcon: ({ color, size }) => (
+              <BookOpen size={size ?? 22} color={color} />
+            ),
+          }}
+        />
 
-      <Tabs.Screen
-        name="profile"
-        options={{
-          tabBarIcon: ({ color }) => <User color={color} />,
-          title: "Spurdle",
-          headerShown: true,
-        }}
-      />
-    </Tabs>
+        {/* 2. Middle Add Action Button */}
+        <Tabs.Screen
+          name="add"
+          listeners={{
+            tabPress: (e) => {
+              e.preventDefault();
+              handlePress();
+            },
+          }}
+          options={{
+            title: "",
+            tabBarIcon: ({ color, size }) => (
+              <View
+                style={{
+                  backgroundColor: theme.colors.secondary,
+                  borderRadius: 99,
+                  padding: 8,
+                }}
+              >
+                <Plus size={size ?? 22} color="white" />
+              </View>
+            ),
+          }}
+        />
+
+        {/* 3. Profile Tab */}
+        <Tabs.Screen
+          name="profile"
+          options={{
+            title: "Profile",
+            tabBarIcon: ({ color, size }) => (
+              <User size={size ?? 22} color={color} />
+            ),
+          }}
+        />
+      </Tabs>
+    </>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  profileButton: {
-    height: 29,
-    width: 29,
-    backgroundColor: "grey",
-    borderRadius: 999,
-    marginRight: 16,
-  },
-  avatar: {
-    width: "100%",
-    height: "100%",
-    borderRadius: 999,
-  },
-
-  placeholder: {
-    flex: 1,
-    backgroundColor: "#666",
-    borderRadius: 999,
-  },
-});
