@@ -19,18 +19,25 @@ import {
   Lock,
   Users,
 } from "lucide-react-native";
-import { useCallback, useEffect, useRef, useState } from "react"; // Added useCallback
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-
-import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
+import {
+  KeyboardAwareScrollView,
+  useKeyboardHandler,
+} from "react-native-keyboard-controller";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // Local book member format
@@ -50,7 +57,7 @@ export default function NewBookScreen() {
   const [isPrivate, setIsPrivate] = useState(true);
   const [members, setMembers] = useState<BookMember[]>([]);
 
-  // 2. Fetch parameter as a raw string
+  // Fetch parameters
   const { newMember, id, role } = useLocalSearchParams<{
     newMember?: string;
     id?: string;
@@ -60,6 +67,43 @@ export default function NewBookScreen() {
   // Input Focus Refs
   const titleRef = useRef<TextInput>(null);
   const descriptionRef = useRef<TextInput>(null);
+
+  // Scroll & layout position tracking
+  const scrollRef = useRef<ScrollView>(null);
+  const fieldY = useRef<Record<string, number>>({});
+
+  // Native header height (status bar inset + 44) plus gap
+  const scrollTargetOffset = insets.top + 44 + 12;
+
+  // Track keyboard height smoothly during interactive gestures/drags
+  const keyboardHeight = useSharedValue(0);
+
+  useKeyboardHandler({
+    onMove: (e) => {
+      "worklet";
+      keyboardHeight.value = e.height;
+    },
+    onEnd: (e) => {
+      "worklet";
+      keyboardHeight.value = e.height;
+    },
+  });
+
+  // Dynamically pad the scroll content frame-by-frame as the keyboard moves
+  const animatedPaddingStyle = useAnimatedStyle(() => ({
+    paddingBottom: 140 + keyboardHeight.value,
+  }));
+
+  const scrollFieldToTop = (key: "title" | "description") => {
+    setTimeout(() => {
+      const y = fieldY.current[key];
+      if (y === undefined) return;
+      scrollRef.current?.scrollTo({
+        y: Math.max(0, y - scrollTargetOffset),
+        animated: true,
+      });
+    }, 50);
+  };
 
   const isEditing = Boolean(id);
 
@@ -167,20 +211,18 @@ export default function NewBookScreen() {
     },
   });
 
-  // 3. Clean string parameters safely inside useFocusEffect with useCallback
+  // Handle incoming member additions from modal route
   useFocusEffect(
     useCallback(() => {
       if (newMember) {
         try {
           const parsedMember: BookMember = JSON.parse(newMember);
 
-          // Check if member is already added to prevent duplicates
           setMembers((prev) => {
             if (prev.some((m) => m.id === parsedMember.id)) return prev;
             return [...prev, { ...parsedMember, role }];
           });
 
-          // Optional: Wipe the parameters so back-and-forth toggles don't duplicate
           router.setParams({ newMember: undefined, role: undefined });
         } catch (e) {
           console.error("Failed to parse returned member JSON data", e);
@@ -212,8 +254,6 @@ export default function NewBookScreen() {
       </View>
     );
   }
-
-  // ... remaining render tree remains structural identical
 
   return (
     <View style={styles.container}>
@@ -247,188 +287,200 @@ export default function NewBookScreen() {
       />
 
       <KeyboardAwareScrollView
+        ref={scrollRef}
+        keyboardDismissMode="on-drag"
         style={{ flex: 1 }}
         contentContainerStyle={styles.scrollBody}
         keyboardShouldPersistTaps="handled"
         bottomOffset={120}
       >
-        {/* <View style={styles.card}> */}
-        {/* Cover Photo Selection */}
-        <Text style={styles.fieldLabel}>COVER PHOTO</Text>
-        <TouchableOpacity
-          style={styles.coverBox}
-          onPress={openPhotoSelector}
-          activeOpacity={0.85}
-        >
-          {coverImageUri?.assets?.[0]?.uri ? (
-            <Image
-              source={{ uri: coverImageUri.assets[0].uri }}
-              style={styles.coverImage}
-            />
-          ) : existingImageUrl ? (
-            <Image
-              source={{ uri: existingImageUrl }}
-              style={styles.coverImage}
-            />
-          ) : (
-            <View style={styles.placeholderContainer}>
-              <ImageIcon size={30} color="#8E8E93" />
-              <Text style={styles.placeholderText}>Tap to add cover photo</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-
-        {/* Book Title */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.fieldLabel}>BOOK TITLE *</Text>
-          <TextInput
-            ref={titleRef}
-            style={styles.boxInput}
-            value={title}
-            onChangeText={setTitle}
-            placeholder="e.g., Summer Barbecue Favorites"
-            placeholderTextColor="#8E8E93"
-            returnKeyType="next"
-            onSubmitEditing={() => descriptionRef.current?.focus()}
-            blurOnSubmit={false}
-          />
-        </View>
-
-        {/* Description */}
-        <View style={[styles.inputGroup]}>
-          <Text style={styles.fieldLabel}>DESCRIPTION</Text>
-          <TextInput
-            ref={descriptionRef}
-            multiline={true}
-            style={[styles.boxInput, styles.textAreaInput]}
-            value={description}
-            onChangeText={setDescription}
-            placeholder="A collection of recipes for outdoor grilling and backyard parties"
-            placeholderTextColor="#8E8E93"
-          />
-        </View>
-
-        {/* sharing */}
-        <View style={[styles.inputGroup, { marginBottom: 0 }]}>
-          <Text style={styles.fieldLabel}>SHARING</Text>
-
-          <View style={styles.sharingSelector}>
-            <TouchableOpacity
-              style={[
-                styles.sharingCard,
-                isPrivate && styles.sharingCardSelected,
-              ]}
-              onPress={() => setIsPrivate(true)}
-            >
-              <Lock size={18} color={isPrivate ? "#000" : "#777"} />
-              <Text
-                style={[
-                  styles.sharingText,
-                  isPrivate && styles.sharingTextSelected,
-                ]}
-              >
-                Private
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.sharingCard,
-                !isPrivate && styles.sharingCardSelected,
-              ]}
-              onPress={() => setIsPrivate(false)}
-            >
-              <Users size={18} color={!isPrivate ? "#000" : "#777"} />
-              <Text
-                style={[
-                  styles.sharingText,
-                  !isPrivate && styles.sharingTextSelected,
-                ]}
-              >
-                Shared
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {!isPrivate && (
-          <View style={styles.accessSection}>
-            <View style={styles.accessHeader}>
-              <Text style={styles.fieldLabel}>PEOPLE WITH ACCESS</Text>
-            </View>
-
-            <View style={styles.membersCard}>
-              <View style={styles.memberRow}>
-                {profile?.avatar_url ? (
-                  <Image
-                    source={{ uri: profile.avatar_url }}
-                    style={styles.memberAvatar}
-                  />
-                ) : (
-                  <View style={styles.memberAvatarPlaceholder}>
-                    <Text style={styles.memberAvatarText}>
-                      {profile?.full_name?.charAt(0).toUpperCase() ?? "?"}
-                    </Text>
-                  </View>
-                )}
-
-                <View style={styles.memberInfo}>
-                  <Text style={styles.memberName}>{profile?.full_name}</Text>
-                  <Text style={styles.memberUsername}>You</Text>
-                </View>
-
-                <View style={styles.roleBadge}>
-                  <Text style={styles.roleText}>Owner</Text>
-                </View>
+        <Animated.View style={animatedPaddingStyle}>
+          {/* Cover Photo Selection */}
+          <Text style={styles.fieldLabel}>COVER PHOTO</Text>
+          <TouchableOpacity
+            style={styles.coverBox}
+            onPress={openPhotoSelector}
+            activeOpacity={0.85}
+          >
+            {coverImageUri?.assets?.[0]?.uri ? (
+              <Image
+                source={{ uri: coverImageUri.assets[0].uri }}
+                style={styles.coverImage}
+              />
+            ) : existingImageUrl ? (
+              <Image
+                source={{ uri: existingImageUrl }}
+                style={styles.coverImage}
+              />
+            ) : (
+              <View style={styles.placeholderContainer}>
+                <ImageIcon size={30} color="#8E8E93" />
+                <Text style={styles.placeholderText}>
+                  Tap to add cover photo
+                </Text>
               </View>
-              {members.map((member) => (
-                <View key={member.id} style={styles.memberRow}>
-                  {/* Avatar */}
-                  {member.avatar_url ? (
+            )}
+          </TouchableOpacity>
+
+          {/* Book Title */}
+          <View
+            style={styles.inputGroup}
+            onLayout={(e) => (fieldY.current.title = e.nativeEvent.layout.y)}
+          >
+            <Text style={styles.fieldLabel}>BOOK TITLE *</Text>
+            <TextInput
+              ref={titleRef}
+              style={styles.boxInput}
+              value={title}
+              onChangeText={setTitle}
+              onFocus={() => scrollFieldToTop("title")}
+              placeholder="e.g., Summer Barbecue Favorites"
+              placeholderTextColor="#8E8E93"
+              returnKeyType="next"
+              onSubmitEditing={() => descriptionRef.current?.focus()}
+              blurOnSubmit={false}
+            />
+          </View>
+
+          {/* Description */}
+          <View
+            style={styles.inputGroup}
+            onLayout={(e) =>
+              (fieldY.current.description = e.nativeEvent.layout.y)
+            }
+          >
+            <Text style={styles.fieldLabel}>DESCRIPTION</Text>
+            <TextInput
+              ref={descriptionRef}
+              multiline={true}
+              style={[styles.boxInput, styles.textAreaInput]}
+              value={description}
+              onChangeText={setDescription}
+              onFocus={() => scrollFieldToTop("description")}
+              placeholder="A collection of recipes for outdoor grilling and backyard parties"
+              placeholderTextColor="#8E8E93"
+            />
+          </View>
+
+          {/* Sharing */}
+          <View style={[styles.inputGroup, { marginBottom: 0 }]}>
+            <Text style={styles.fieldLabel}>SHARING</Text>
+
+            <View style={styles.sharingSelector}>
+              <TouchableOpacity
+                style={[
+                  styles.sharingCard,
+                  isPrivate && styles.sharingCardSelected,
+                ]}
+                onPress={() => setIsPrivate(true)}
+              >
+                <Lock size={18} color={isPrivate ? "#000" : "#777"} />
+                <Text
+                  style={[
+                    styles.sharingText,
+                    isPrivate && styles.sharingTextSelected,
+                  ]}
+                >
+                  Private
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.sharingCard,
+                  !isPrivate && styles.sharingCardSelected,
+                ]}
+                onPress={() => setIsPrivate(false)}
+              >
+                <Users size={18} color={!isPrivate ? "#000" : "#777"} />
+                <Text
+                  style={[
+                    styles.sharingText,
+                    !isPrivate && styles.sharingTextSelected,
+                  ]}
+                >
+                  Shared
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {!isPrivate && (
+            <View style={styles.accessSection}>
+              <View style={styles.accessHeader}>
+                <Text style={styles.fieldLabel}>PEOPLE WITH ACCESS</Text>
+              </View>
+
+              <View style={styles.membersCard}>
+                <View style={styles.memberRow}>
+                  {profile?.avatar_url ? (
                     <Image
-                      source={{ uri: member.avatar_url }}
+                      source={{ uri: profile.avatar_url }}
                       style={styles.memberAvatar}
                     />
                   ) : (
                     <View style={styles.memberAvatarPlaceholder}>
                       <Text style={styles.memberAvatarText}>
-                        {member.full_name?.charAt(0).toUpperCase() ?? "?"}
+                        {profile?.full_name?.charAt(0).toUpperCase() ?? "?"}
                       </Text>
                     </View>
                   )}
 
-                  {/* Name */}
                   <View style={styles.memberInfo}>
-                    <Text style={styles.memberName} numberOfLines={1}>
-                      {member.full_name}
-                    </Text>
+                    <Text style={styles.memberName}>{profile?.full_name}</Text>
+                    <Text style={styles.memberUsername}>You</Text>
                   </View>
 
-                  {/* Role */}
                   <View style={styles.roleBadge}>
-                    <Text style={styles.roleText}>
-                      {member.role === "editor" ? "Editor" : "Viewer"}
-                    </Text>
+                    <Text style={styles.roleText}>Owner</Text>
                   </View>
                 </View>
-              ))}
 
-              {/* Add people */}
-              <TouchableOpacity
-                style={styles.addPeopleButton}
-                onPress={handleAddPeople}
-                activeOpacity={0.7}
-              >
-                <View style={styles.addPeopleIcon}>
-                  <Users size={17} color="#111" />
-                </View>
+                {members.map((member) => (
+                  <View key={member.id} style={styles.memberRow}>
+                    {member.avatar_url ? (
+                      <Image
+                        source={{ uri: member.avatar_url }}
+                        style={styles.memberAvatar}
+                      />
+                    ) : (
+                      <View style={styles.memberAvatarPlaceholder}>
+                        <Text style={styles.memberAvatarText}>
+                          {member.full_name?.charAt(0).toUpperCase() ?? "?"}
+                        </Text>
+                      </View>
+                    )}
 
-                <Text style={styles.addPeopleText}>Add people +</Text>
-              </TouchableOpacity>
+                    <View style={styles.memberInfo}>
+                      <Text style={styles.memberName} numberOfLines={1}>
+                        {member.full_name}
+                      </Text>
+                    </View>
+
+                    <View style={styles.roleBadge}>
+                      <Text style={styles.roleText}>
+                        {member.role === "editor" ? "Editor" : "Viewer"}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+
+                {/* Add people */}
+                <TouchableOpacity
+                  style={styles.addPeopleButton}
+                  onPress={handleAddPeople}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.addPeopleIcon}>
+                    <Users size={17} color="#111" />
+                  </View>
+
+                  <Text style={styles.addPeopleText}>Add people +</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        )}
-        {/* </View> */}
+          )}
+        </Animated.View>
       </KeyboardAwareScrollView>
 
       {/* Floating Action Bar Drawer */}
@@ -471,12 +523,6 @@ const styles = StyleSheet.create({
   scrollBody: {
     paddingHorizontal: 16,
     paddingTop: 92,
-    paddingBottom: 140,
-  },
-  card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 16,
   },
   fieldLabel: {
     fontSize: 12,
@@ -598,13 +644,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 8,
-  },
-
-  accessCount: {
-    marginLeft: 6,
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#8E8E93",
   },
 
   membersCard: {

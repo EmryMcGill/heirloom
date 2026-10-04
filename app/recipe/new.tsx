@@ -16,18 +16,22 @@ import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  InputAccessoryView,
-  Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
+import {
+  KeyboardAwareScrollView,
+  useKeyboardHandler,
+} from "react-native-keyboard-controller";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
-const DESCRIPTION_ACCESSORY_ID = "descriptionNextToolbar";
 
 export default function NewRecipeScreen() {
   const { session } = useAuth();
@@ -35,7 +39,7 @@ export default function NewRecipeScreen() {
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
 
-  // Route Params (pass recipeId instead of full JSON string)
+  // Route Params
   const { recipeId, isClone } = useLocalSearchParams<{
     recipeId?: string;
     isClone?: string;
@@ -49,6 +53,43 @@ export default function NewRecipeScreen() {
   const servingsRef = useRef<TextInput>(null);
   const ingredientRefs = useRef<(TextInput | null)[]>([]);
   const stepRefs = useRef<(TextInput | null)[]>([]);
+
+  // Scroll & layout position tracking
+  const scrollRef = useRef<ScrollView>(null);
+  const fieldY = useRef<Record<string, number>>({});
+
+  // Native header height (status bar inset + 44) plus gap
+  const scrollTargetOffset = insets.top + 44 + 12;
+
+  // Track keyboard height smoothly during interactive gestures/drags
+  const keyboardHeight = useSharedValue(0);
+
+  useKeyboardHandler({
+    onMove: (e) => {
+      "worklet";
+      keyboardHeight.value = e.height;
+    },
+    onEnd: (e) => {
+      "worklet";
+      keyboardHeight.value = e.height;
+    },
+  });
+
+  // Dynamically pad the scroll content frame-by-frame as the keyboard moves
+  const animatedPaddingStyle = useAnimatedStyle(() => ({
+    paddingBottom: 140 + keyboardHeight.value,
+  }));
+
+  const scrollFieldToTop = (key: string) => {
+    setTimeout(() => {
+      const y = fieldY.current[key];
+      if (y === undefined) return;
+      scrollRef.current?.scrollTo({
+        y: Math.max(0, y - scrollTargetOffset),
+        animated: true,
+      });
+    }, 50);
+  };
 
   // Fetch or retrieve cached recipe data if editing/cloning
   const { data: recipe, isLoading: isLoadingRecipe } = useQuery<Recipe>({
@@ -124,6 +165,14 @@ export default function NewRecipeScreen() {
     setIngredients((prev) => prev.map((ing, i) => (i === index ? value : ing)));
   };
 
+  const addIngredient = () => {
+    setIngredients((prev) => [...prev, ""]);
+    setTimeout(() => {
+      const lastIndex = ingredients.length;
+      ingredientRefs.current[lastIndex]?.focus();
+    }, 50);
+  };
+
   const removeIngredient = (index: number) => {
     ingredientRefs.current.splice(index, 1);
     setIngredients((prev) => prev.filter((_, i) => i !== index));
@@ -133,14 +182,17 @@ export default function NewRecipeScreen() {
     setSteps((prev) => prev.map((step, i) => (i === index ? value : step)));
   };
 
+  const addStep = () => {
+    setSteps((prev) => [...prev, ""]);
+    setTimeout(() => {
+      const lastIndex = steps.length;
+      stepRefs.current[lastIndex]?.focus();
+    }, 50);
+  };
+
   const removeStep = (index: number) => {
     stepRefs.current.splice(index, 1);
     setSteps((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  // Focus Navigation
-  const handleDescriptionNext = () => {
-    prepTimeRef.current?.focus();
   };
 
   // Save Mutation
@@ -252,232 +304,250 @@ export default function NewRecipeScreen() {
       />
 
       <KeyboardAwareScrollView
+        ref={scrollRef}
+        keyboardDismissMode="on-drag"
         style={{ flex: 1 }}
         contentContainerStyle={styles.scrollBody}
         keyboardShouldPersistTaps="handled"
         bottomOffset={120}
       >
-        {/* Cover Photo */}
-        <Text style={styles.fieldLabel}>COVER PHOTO</Text>
-        <TouchableOpacity
-          style={styles.coverBox}
-          onPress={openPhotoSelector}
-          activeOpacity={0.85}
-        >
-          {coverImageUri?.assets?.[0]?.uri ? (
-            <Image
-              source={{ uri: coverImageUri.assets[0].uri }}
-              style={styles.coverImage}
+        <Animated.View style={animatedPaddingStyle}>
+          {/* Cover Photo */}
+          <Text style={styles.fieldLabel}>COVER PHOTO</Text>
+          <TouchableOpacity
+            style={styles.coverBox}
+            onPress={openPhotoSelector}
+            activeOpacity={0.85}
+          >
+            {coverImageUri?.assets?.[0]?.uri ? (
+              <Image
+                source={{ uri: coverImageUri.assets[0].uri }}
+                style={styles.coverImage}
+              />
+            ) : existingImageUrl ? (
+              <Image
+                source={{ uri: existingImageUrl }}
+                style={styles.coverImage}
+              />
+            ) : (
+              <View style={styles.placeholderContainer}>
+                <ImageIcon size={30} color="#8E8E93" />
+                <Text style={styles.placeholderText}>
+                  Tap to add cover photo
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          {/* Recipe Title */}
+          <View
+            style={styles.inputGroup}
+            onLayout={(e) => (fieldY.current.title = e.nativeEvent.layout.y)}
+          >
+            <Text style={styles.fieldLabel}>RECIPE TITLE *</Text>
+            <TextInput
+              ref={titleRef}
+              style={styles.boxInput}
+              value={title}
+              onChangeText={setTitle}
+              onFocus={() => scrollFieldToTop("title")}
+              placeholder="e.g., Grandma's Chocolate Chip Cookies"
+              placeholderTextColor="#8E8E93"
+              returnKeyType="next"
+              onSubmitEditing={() => descriptionRef.current?.focus()}
+              blurOnSubmit={false}
             />
-          ) : existingImageUrl ? (
-            <Image
-              source={{ uri: existingImageUrl }}
-              style={styles.coverImage}
+          </View>
+
+          {/* Description */}
+          <View
+            style={styles.inputGroup}
+            onLayout={(e) =>
+              (fieldY.current.description = e.nativeEvent.layout.y)
+            }
+          >
+            <Text style={styles.fieldLabel}>DESCRIPTION</Text>
+            <TextInput
+              ref={descriptionRef}
+              multiline={true}
+              style={[styles.boxInput, styles.textAreaInput]}
+              value={description}
+              onChangeText={setDescription}
+              onFocus={() => scrollFieldToTop("description")}
+              placeholder="A brief overview or summary of the dish"
+              placeholderTextColor="#8E8E93"
             />
-          ) : (
-            <View style={styles.placeholderContainer}>
-              <ImageIcon size={30} color="#8E8E93" />
-              <Text style={styles.placeholderText}>Tap to add cover photo</Text>
+          </View>
+
+          {/* Metrics Row */}
+          <View
+            style={[styles.inputGroup, styles.metricsRow]}
+            onLayout={(e) => (fieldY.current.metrics = e.nativeEvent.layout.y)}
+          >
+            <View style={styles.metricItem}>
+              <Text style={styles.fieldLabel}>PREP TIME</Text>
+              <TextInput
+                ref={prepTimeRef}
+                style={styles.boxInput}
+                value={prepTime}
+                onChangeText={setPrepTime}
+                onFocus={() => scrollFieldToTop("metrics")}
+                placeholder="15 mins"
+                placeholderTextColor="#8E8E93"
+                returnKeyType="next"
+                onSubmitEditing={() => cookTimeRef.current?.focus()}
+                blurOnSubmit={false}
+              />
             </View>
-          )}
-        </TouchableOpacity>
-
-        {/* Recipe Title */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.fieldLabel}>RECIPE TITLE *</Text>
-          <TextInput
-            ref={titleRef}
-            style={styles.boxInput}
-            value={title}
-            onChangeText={setTitle}
-            placeholder="e.g., Grandma's Chocolate Chip Cookies"
-            placeholderTextColor="#8E8E93"
-            returnKeyType="next"
-            onSubmitEditing={() => descriptionRef.current?.focus()}
-            blurOnSubmit={false}
-          />
-        </View>
-
-        {/* Description */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.fieldLabel}>DESCRIPTION</Text>
-          <TextInput
-            ref={descriptionRef}
-            multiline={true}
-            style={[styles.boxInput, styles.textAreaInput]}
-            value={description}
-            onChangeText={setDescription}
-            placeholder="A brief overview or summary of the dish"
-            placeholderTextColor="#8E8E93"
-            inputAccessoryViewID={DESCRIPTION_ACCESSORY_ID}
-          />
-        </View>
-
-        {/* Metrics Row */}
-        <View style={[styles.inputGroup, styles.metricsRow]}>
-          <View style={styles.metricItem}>
-            <Text style={styles.fieldLabel}>PREP TIME</Text>
-            <TextInput
-              ref={prepTimeRef}
-              style={styles.boxInput}
-              value={prepTime}
-              onChangeText={setPrepTime}
-              placeholder="15 mins"
-              placeholderTextColor="#8E8E93"
-              returnKeyType="next"
-              onSubmitEditing={() => cookTimeRef.current?.focus()}
-              blurOnSubmit={false}
-            />
+            <View style={styles.metricItem}>
+              <Text style={styles.fieldLabel}>COOK TIME</Text>
+              <TextInput
+                ref={cookTimeRef}
+                style={styles.boxInput}
+                value={cookTime}
+                onChangeText={setCookTime}
+                onFocus={() => scrollFieldToTop("metrics")}
+                placeholder="30 mins"
+                placeholderTextColor="#8E8E93"
+                returnKeyType="next"
+                onSubmitEditing={() => servingsRef.current?.focus()}
+                blurOnSubmit={false}
+              />
+            </View>
+            <View style={styles.metricItem}>
+              <Text style={styles.fieldLabel}>SERVINGS</Text>
+              <TextInput
+                ref={servingsRef}
+                style={styles.boxInput}
+                value={servings}
+                onChangeText={setServings}
+                onFocus={() => scrollFieldToTop("metrics")}
+                placeholder="4"
+                placeholderTextColor="#8E8E93"
+                keyboardType="numeric"
+                returnKeyType="next"
+                onSubmitEditing={() => ingredientRefs.current[0]?.focus()}
+                blurOnSubmit={false}
+              />
+            </View>
           </View>
-          <View style={styles.metricItem}>
-            <Text style={styles.fieldLabel}>COOK TIME</Text>
-            <TextInput
-              ref={cookTimeRef}
-              style={styles.boxInput}
-              value={cookTime}
-              onChangeText={setCookTime}
-              placeholder="30 mins"
-              placeholderTextColor="#8E8E93"
-              returnKeyType="next"
-              onSubmitEditing={() => servingsRef.current?.focus()}
-              blurOnSubmit={false}
-            />
-          </View>
-          <View style={styles.metricItem}>
-            <Text style={styles.fieldLabel}>SERVINGS</Text>
-            <TextInput
-              ref={servingsRef}
-              style={styles.boxInput}
-              value={servings}
-              onChangeText={setServings}
-              placeholder="4"
-              placeholderTextColor="#8E8E93"
-              keyboardType="numeric"
-              returnKeyType="next"
-              onSubmitEditing={() => ingredientRefs.current[0]?.focus()}
-              blurOnSubmit={false}
-            />
-          </View>
-        </View>
 
-        {/* Dynamic Ingredients */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.fieldLabel}>INGREDIENTS *</Text>
-          <View style={styles.dynamicListContainer}>
-            {ingredients.map((ingredient, index) => (
-              <View key={index} style={styles.dynamicRow}>
-                <TextInput
-                  ref={(el) => (ingredientRefs.current[index] = el)}
-                  style={[styles.boxInput, styles.dynamicInput]}
-                  placeholder="e.g., 2 cups flour"
-                  value={ingredient}
-                  onChangeText={(value) => updateIngredient(index, value)}
-                  placeholderTextColor="#8E8E93"
-                  returnKeyType="next"
-                  blurOnSubmit={false}
-                  onSubmitEditing={() => {
-                    if (index < ingredients.length - 1) {
-                      ingredientRefs.current[index + 1]?.focus();
-                    } else {
-                      stepRefs.current[0]?.focus();
-                    }
-                  }}
-                />
-                {ingredients.length > 1 && (
-                  <TouchableOpacity
-                    style={styles.rowDeleteButton}
-                    onPress={() => removeIngredient(index)}
-                    activeOpacity={0.7}
-                  >
-                    <X size={18} color="#666666" />
-                  </TouchableOpacity>
-                )}
-              </View>
-            ))}
-            <TouchableOpacity
-              onPress={() => {
-                setIngredients((prev) => [...prev, ""]);
-                setTimeout(() => {
-                  ingredientRefs.current[ingredients.length]?.focus();
-                }, 50);
-              }}
-              style={styles.appendListButton}
-              activeOpacity={0.7}
-            >
-              <Plus size={16} color="#111" />
-              <Text style={styles.appendListButtonText}>Add Ingredient</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Dynamic Steps */}
-        <View style={[styles.inputGroup, { marginBottom: 0 }]}>
-          <Text style={styles.fieldLabel}>STEPS *</Text>
-          <View style={styles.dynamicListContainer}>
-            {steps.map((step, index) => (
-              <View key={index} style={styles.dynamicRow}>
-                <View style={styles.stepIndexMarker}>
-                  <Text style={styles.stepIndexText}>{index + 1}</Text>
+          {/* Dynamic Ingredients */}
+          <View
+            style={styles.inputGroup}
+            onLayout={(e) =>
+              (fieldY.current.ingredients = e.nativeEvent.layout.y)
+            }
+          >
+            <Text style={styles.fieldLabel}>INGREDIENTS *</Text>
+            <View style={styles.dynamicListContainer}>
+              {ingredients.map((ingredient, index) => (
+                <View
+                  key={index}
+                  style={styles.dynamicRow}
+                  onLayout={(e) =>
+                    (fieldY.current[`ingredient_${index}`] =
+                      fieldY.current.ingredients + e.nativeEvent.layout.y)
+                  }
+                >
+                  <TextInput
+                    ref={(el) => (ingredientRefs.current[index] = el)}
+                    style={[styles.boxInput, styles.dynamicInput]}
+                    value={ingredient}
+                    onChangeText={(val) => updateIngredient(index, val)}
+                    onFocus={() => scrollFieldToTop(`ingredient_${index}`)}
+                    placeholder={`Ingredient ${index + 1}`}
+                    placeholderTextColor="#8E8E93"
+                    returnKeyType="next"
+                    onSubmitEditing={() => {
+                      if (index < ingredients.length - 1) {
+                        ingredientRefs.current[index + 1]?.focus();
+                      } else {
+                        stepRefs.current[0]?.focus();
+                      }
+                    }}
+                    blurOnSubmit={false}
+                  />
+                  {ingredients.length > 1 && (
+                    <TouchableOpacity
+                      style={styles.removeBtn}
+                      onPress={() => removeIngredient(index)}
+                      hitSlop={8}
+                    >
+                      <X size={18} color="#FF3B30" />
+                    </TouchableOpacity>
+                  )}
                 </View>
-                <TextInput
-                  ref={(el) => (stepRefs.current[index] = el)}
-                  multiline={false}
-                  style={[styles.boxInput, styles.dynamicInput]}
-                  placeholder="Describe this step..."
-                  value={step}
-                  onChangeText={(value) => updateStep(index, value)}
-                  placeholderTextColor="#8E8E93"
-                  returnKeyType={index === steps.length - 1 ? "done" : "next"}
-                  blurOnSubmit={false}
-                  onSubmitEditing={() => {
-                    if (index < steps.length - 1) {
-                      stepRefs.current[index + 1]?.focus();
-                    } else {
-                      stepRefs.current[index]?.blur();
-                    }
-                  }}
-                />
-                {steps.length > 1 && (
-                  <TouchableOpacity
-                    style={styles.rowDeleteButton}
-                    onPress={() => removeStep(index)}
-                    activeOpacity={0.7}
-                  >
-                    <X size={18} color="#666666" />
-                  </TouchableOpacity>
-                )}
-              </View>
-            ))}
-            <TouchableOpacity
-              onPress={() => {
-                setSteps((prev) => [...prev, ""]);
-                setTimeout(() => {
-                  stepRefs.current[steps.length]?.focus();
-                }, 50);
-              }}
-              style={styles.appendListButton}
-              activeOpacity={0.7}
-            >
-              <Plus size={16} color="#111" />
-              <Text style={styles.appendListButtonText}>Add Step</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </KeyboardAwareScrollView>
+              ))}
 
-      {/* Keyboard Accessory Bar for iOS */}
-      {Platform.OS === "ios" && (
-        <InputAccessoryView nativeID={DESCRIPTION_ACCESSORY_ID}>
-          <View style={styles.accessoryBar}>
-            <TouchableOpacity
-              onPress={handleDescriptionNext}
-              style={styles.accessoryButton}
-            >
-              <Text style={styles.accessoryButtonText}>Next</Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.addBtn}
+                onPress={addIngredient}
+                activeOpacity={0.7}
+              >
+                <Plus size={16} color={theme.colors.black || "#111111"} />
+                <Text style={styles.addBtnText}>Add Ingredient</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </InputAccessoryView>
-      )}
+
+          {/* Dynamic Steps */}
+          <View
+            style={styles.inputGroup}
+            onLayout={(e) => (fieldY.current.steps = e.nativeEvent.layout.y)}
+          >
+            <Text style={styles.fieldLabel}>INSTRUCTIONS *</Text>
+            <View style={styles.dynamicListContainer}>
+              {steps.map((step, index) => (
+                <View
+                  key={index}
+                  style={styles.dynamicRow}
+                  onLayout={(e) =>
+                    (fieldY.current[`step_${index}`] =
+                      fieldY.current.steps + e.nativeEvent.layout.y)
+                  }
+                >
+                  <TextInput
+                    ref={(el) => (stepRefs.current[index] = el)}
+                    multiline={true}
+                    style={[
+                      styles.boxInput,
+                      styles.dynamicInput,
+                      styles.textAreaInput,
+                    ]}
+                    value={step}
+                    onChangeText={(val) => updateStep(index, val)}
+                    onFocus={() => scrollFieldToTop(`step_${index}`)}
+                    placeholder={`Step ${index + 1}`}
+                    placeholderTextColor="#8E8E93"
+                  />
+                  {steps.length > 1 && (
+                    <TouchableOpacity
+                      style={[
+                        styles.removeBtn,
+                        { alignSelf: "flex-start", marginTop: 12 },
+                      ]}
+                      onPress={() => removeStep(index)}
+                      hitSlop={8}
+                    >
+                      <X size={18} color="#FF3B30" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ))}
+
+              <TouchableOpacity
+                style={styles.addBtn}
+                onPress={addStep}
+                activeOpacity={0.7}
+              >
+                <Plus size={16} color={theme.colors.black || "#111111"} />
+                <Text style={styles.addBtnText}>Add Step</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Animated.View>
+      </KeyboardAwareScrollView>
 
       {/* Floating Action Bar Drawer */}
       <BlurView
@@ -519,7 +589,6 @@ const styles = StyleSheet.create({
   scrollBody: {
     paddingHorizontal: 16,
     paddingTop: 92,
-    paddingBottom: 140,
   },
   fieldLabel: {
     fontSize: 12,
@@ -554,6 +623,13 @@ const styles = StyleSheet.create({
   inputGroup: {
     marginBottom: 16,
   },
+  metricsRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  metricItem: {
+    flex: 1,
+  },
   boxInput: {
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -566,76 +642,34 @@ const styles = StyleSheet.create({
     minHeight: 110,
     textAlignVertical: "top",
   },
-  metricsRow: {
-    flexDirection: "row",
-    gap: 10,
-    width: "100%",
-  },
-  metricItem: {
-    flex: 1,
-  },
   dynamicListContainer: {
     gap: 10,
   },
   dynamicRow: {
     flexDirection: "row",
-    gap: 8,
     alignItems: "center",
+    gap: 8,
   },
   dynamicInput: {
     flex: 1,
   },
-  rowDeleteButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: "#FFFFFF",
-    alignItems: "center",
-    justifyContent: "center",
+  removeBtn: {
+    padding: 6,
   },
-  stepIndexMarker: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: theme.colors.secondary,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  stepIndexText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#FFFFFF",
-  },
-  appendListButton: {
+  addBtn: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    alignSelf: "flex-start",
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: "rgba(0, 0, 0, 0.05)",
     marginTop: 4,
   },
-  appendListButtonText: {
-    fontWeight: "600",
-    color: "#111",
+  addBtnText: {
     fontSize: 14,
-  },
-  accessoryBar: {
-    backgroundColor: "#F8F8F8",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderTopWidth: 1,
-    borderTopColor: "#E5E5EA",
-    alignItems: "flex-end",
-  },
-  accessoryButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  accessoryButtonText: {
-    color: "#007AFF",
-    fontSize: 16,
     fontWeight: "600",
+    color: theme.colors.black || "#111111",
   },
   saveDrawer: {
     position: "absolute",
