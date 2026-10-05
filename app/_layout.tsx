@@ -1,3 +1,4 @@
+import LoadingOverlay from "@/components/LoadingOverlay";
 import {
   GentiumPlus_400Regular,
   GentiumPlus_400Regular_Italic,
@@ -10,7 +11,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Href, Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { AuthProvider, useAuth } from "../contexts/AuthContext";
 
 SplashScreen.preventAutoHideAsync();
@@ -59,7 +60,7 @@ function RootLayoutNav() {
   if (!isReady) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#FF6B6B" />
+        <LoadingOverlay visible={true} mode="modal" />
       </View>
     );
   }
