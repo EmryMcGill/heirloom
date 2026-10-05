@@ -9,16 +9,22 @@ import { useEffect, useRef, useState } from "react";
 import {
   Alert,
   AppState,
-  Keyboard,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  TouchableWithoutFeedback,
   View,
 } from "react-native";
+import {
+  KeyboardAwareScrollView,
+  useKeyboardHandler,
+} from "react-native-keyboard-controller";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+} from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabase";
@@ -28,8 +34,12 @@ interface ValidationError {
   msg: string;
 }
 
+const CONTENT_PADDING_TOP = 24; // must match styles.container.paddingTop
+const SCROLL_TOP_GAP = 12;
+
 export default function Auth() {
   const { refreshProfile } = useAuth();
+
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -38,10 +48,48 @@ export default function Auth() {
   const [isLogin, setIsLogin] = useState(false);
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
 
-  const passwordRef = useRef<TextInput>(null);
+  // Input focus refs
   const emailRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
 
-  // AppState Listener Lifecycle (Prevents subscription leak)
+  // Scroll & layout position tracking
+  const scrollRef = useRef<ScrollView>(null);
+  const fieldY = useRef<Record<string, number>>({});
+  const formY = useRef(0);
+
+  // Track keyboard height smoothly during interactive gestures/drags
+  const keyboardHeight = useSharedValue(0);
+
+  useKeyboardHandler({
+    onMove: (e) => {
+      "worklet";
+      keyboardHeight.value = e.height;
+    },
+    onEnd: (e) => {
+      "worklet";
+      keyboardHeight.value = e.height;
+    },
+  });
+
+  // Dynamically pad the scroll content frame-by-frame as the keyboard moves
+  const animatedPaddingStyle = useAnimatedStyle(() => ({
+    paddingBottom: 220 + keyboardHeight.value,
+  }));
+
+  const scrollFieldToTop = (key: string) => {
+    setTimeout(() => {
+      const y = fieldY.current[key];
+      if (y === undefined) return;
+      scrollRef.current?.scrollTo({
+        y: Math.max(
+          0,
+          formY.current + y + CONTENT_PADDING_TOP - SCROLL_TOP_GAP,
+        ),
+        animated: true,
+      });
+    }, 50);
+  };
+
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {
       if (state === "active") {
@@ -82,18 +130,14 @@ export default function Auth() {
     uri: string,
   ): Promise<string | null> {
     try {
-      // 1. Instantiate File with local URI and read base64 string
       const file = new File(uri);
       const base64 = await file.base64();
-
-      // 2. Decode base64 to ArrayBuffer (Supabase native upload format)
       const arrayBuffer = decode(base64);
 
       const rawExt = uri.split(".").pop()?.toLowerCase() ?? "jpeg";
       const fileExt = rawExt === "jpg" ? "jpeg" : rawExt;
       const filePath = `${userId}/avatar.${fileExt}`;
 
-      // 3. Upload ArrayBuffer with explicit mime type
       const { error: uploadError } = await supabase.storage
         .from("avatars")
         .upload(filePath, arrayBuffer, {
@@ -118,7 +162,6 @@ export default function Auth() {
     setErrors((prev) => prev.filter((e) => e.field !== field));
   };
 
-  // Sign in
   async function signInWithEmail() {
     if (!email.trim() || !password) {
       Alert.alert(
@@ -138,14 +181,16 @@ export default function Auth() {
     setLoading(false);
   }
 
-  // Sign up
   async function signUpWithEmail() {
     const trimmedName = name.trim();
     const trimmedEmail = email.trim();
     const validationErrors: ValidationError[] = [];
 
     if (trimmedName.length === 0) {
-      validationErrors.push({ field: "name", msg: "Please enter a name" });
+      validationErrors.push({
+        field: "name",
+        msg: "Please enter a username",
+      });
     }
 
     if (trimmedEmail.length === 0) {
@@ -212,27 +257,48 @@ export default function Auth() {
     setLoading(false);
   }
 
-  return (
-    <View style={{ flex: 1, position: "relative" }}>
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.beige }}>
-          <ScrollView
-            contentContainerStyle={styles.container}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-            automaticallyAdjustKeyboardInsets={true}
-          >
-            <Text style={styles.title}>
-              {isLogin ? "Login" : "Create an Account"}
-            </Text>
+  const handleSubmit = () => {
+    if (loading) return;
+    if (isLogin) {
+      signInWithEmail();
+    } else {
+      signUpWithEmail();
+    }
+  };
 
-            {/* Avatar picker hidden on login view */}
+  const nameError = errors.find((e) => e.field === "name");
+  const emailError = errors.find((e) => e.field === "email");
+  const passwordError = errors.find((e) => e.field === "password");
+
+  return (
+    <View style={styles.root}>
+      <SafeAreaView style={styles.safeArea}>
+        <KeyboardAwareScrollView
+          ref={scrollRef}
+          keyboardDismissMode="on-drag"
+          style={{ flex: 1 }}
+          contentContainerStyle={styles.container}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          bottomOffset={120}
+        >
+          <Animated.View style={animatedPaddingStyle}>
+            {/* Header */}
+            <View style={styles.headerBlock}>
+              <Text style={styles.brand}>Spurtle</Text>
+              <Text style={styles.title}>
+                {isLogin ? "Welcome back" : "Create an account"}
+              </Text>
+            </View>
+
+            {/* Avatar picker */}
             {!isLogin && (
-              <View style={{ gap: 8 }}>
+              <View style={styles.avatarSection}>
                 <View style={styles.avatarWrapper}>
                   <TouchableOpacity
                     style={styles.avatarContainer}
                     onPress={pickAvatar}
+                    activeOpacity={0.85}
                   >
                     {avatarUri ? (
                       <Image
@@ -241,15 +307,16 @@ export default function Auth() {
                         contentFit="cover"
                       />
                     ) : (
-                      <User size={64} color="grey" />
+                      <User size={48} color="#8E8E93" />
                     )}
                   </TouchableOpacity>
 
                   <TouchableOpacity
                     style={styles.addButton}
                     onPress={pickAvatar}
+                    activeOpacity={0.85}
                   >
-                    <Plus size={16} color="white" />
+                    <Plus size={16} color="#FFFFFF" />
                   </TouchableOpacity>
                 </View>
 
@@ -260,80 +327,100 @@ export default function Auth() {
             )}
 
             {/* Inputs */}
-            <View style={styles.inputContainer}>
+            <View
+              style={styles.form}
+              onLayout={(e) => (formY.current = e.nativeEvent.layout.y)}
+            >
               {!isLogin && (
-                <View>
+                <View
+                  style={styles.inputGroup}
+                  onLayout={(e) =>
+                    (fieldY.current.name = e.nativeEvent.layout.y)
+                  }
+                >
+                  <Text style={styles.fieldLabel}>USERNAME</Text>
                   <TextInput
-                    style={[
-                      styles.textInput,
-                      errors.find((e) => e.field === "name") &&
-                        styles.inputError,
-                    ]}
+                    style={[styles.boxInput, nameError && styles.inputError]}
                     onChangeText={(text) => {
                       setName(text);
                       validateField("name", text);
                     }}
+                    onFocus={() => scrollFieldToTop("name")}
                     value={name}
-                    placeholder="Name"
+                    placeholder="Your username"
+                    placeholderTextColor="#8E8E93"
+                    autoCapitalize="words"
+                    textContentType="name"
+                    autoComplete="name"
                     returnKeyType="next"
                     onSubmitEditing={() => emailRef.current?.focus()}
+                    blurOnSubmit={false}
                   />
-                  <View style={styles.errorContainer}>
-                    {errors.find((e) => e.field === "name") && (
-                      <Text style={styles.errorText}>
-                        * {errors.find((e) => e.field === "name")?.msg}
-                      </Text>
-                    )}
-                  </View>
+                  {nameError && (
+                    <Text style={styles.errorText}>{nameError.msg}</Text>
+                  )}
                 </View>
               )}
 
-              <TextInput
-                style={[
-                  styles.textInput,
-                  errors.find((e) => e.field === "email") && styles.inputError,
-                ]}
-                onChangeText={(text) => {
-                  setEmail(text);
-                  validateField("email", text);
-                }}
-                value={email}
-                placeholder="Email"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                ref={emailRef}
-                returnKeyType="next"
-                onSubmitEditing={() => passwordRef.current?.focus()}
-              />
-              <View style={styles.errorContainer}>
-                {errors.find((e) => e.field === "email") && (
-                  <Text style={styles.errorText}>
-                    * {errors.find((e) => e.field === "email")?.msg}
-                  </Text>
+              <View
+                style={styles.inputGroup}
+                onLayout={(e) =>
+                  (fieldY.current.email = e.nativeEvent.layout.y)
+                }
+              >
+                <Text style={styles.fieldLabel}>EMAIL</Text>
+                <TextInput
+                  ref={emailRef}
+                  style={[styles.boxInput, emailError && styles.inputError]}
+                  onChangeText={(text) => {
+                    setEmail(text);
+                    validateField("email", text);
+                  }}
+                  onFocus={() => scrollFieldToTop("email")}
+                  value={email}
+                  placeholder="you@example.com"
+                  placeholderTextColor="#8E8E93"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  textContentType="emailAddress"
+                  autoComplete="email"
+                  returnKeyType="next"
+                  onSubmitEditing={() => passwordRef.current?.focus()}
+                  blurOnSubmit={false}
+                />
+                {emailError && (
+                  <Text style={styles.errorText}>{emailError.msg}</Text>
                 )}
               </View>
 
-              <TextInput
-                style={[
-                  styles.textInput,
-                  errors.find((e) => e.field === "password") &&
-                    styles.inputError,
-                ]}
-                onChangeText={(text) => {
-                  setPassword(text);
-                  validateField("password", text);
-                }}
-                value={password}
-                secureTextEntry={true}
-                placeholder="Password"
-                autoCapitalize="none"
-                ref={passwordRef}
-              />
-              <View style={styles.errorContainer}>
-                {errors.find((e) => e.field === "password") && (
-                  <Text style={styles.errorText}>
-                    * {errors.find((e) => e.field === "password")?.msg}
-                  </Text>
+              <View
+                style={styles.inputGroup}
+                onLayout={(e) =>
+                  (fieldY.current.password = e.nativeEvent.layout.y)
+                }
+              >
+                <Text style={styles.fieldLabel}>PASSWORD</Text>
+                <TextInput
+                  ref={passwordRef}
+                  style={[styles.boxInput, passwordError && styles.inputError]}
+                  onChangeText={(text) => {
+                    setPassword(text);
+                    validateField("password", text);
+                  }}
+                  onFocus={() => scrollFieldToTop("password")}
+                  value={password}
+                  secureTextEntry={true}
+                  placeholder="At least 6 characters"
+                  placeholderTextColor="#8E8E93"
+                  autoCapitalize="none"
+                  textContentType={isLogin ? "password" : "newPassword"}
+                  autoComplete={isLogin ? "current-password" : "new-password"}
+                  returnKeyType="go"
+                  onSubmitEditing={handleSubmit}
+                />
+                {passwordError && (
+                  <Text style={styles.errorText}>{passwordError.msg}</Text>
                 )}
               </View>
             </View>
@@ -341,12 +428,15 @@ export default function Auth() {
             {/* Buttons */}
             <View style={styles.buttonContainer}>
               <Pressable
-                style={styles.createAccountButton}
-                onPress={() =>
-                  isLogin ? signInWithEmail() : signUpWithEmail()
-                }
+                style={({ pressed }) => [
+                  styles.primaryButton,
+                  pressed && { opacity: 0.85 },
+                  loading && styles.disabledButton,
+                ]}
+                disabled={loading}
+                onPress={handleSubmit}
               >
-                <Text style={styles.createAccountButtonText}>
+                <Text style={styles.primaryButtonText}>
                   {isLogin ? "Login" : "Create Account"}
                 </Text>
               </Pressable>
@@ -354,7 +444,7 @@ export default function Auth() {
 
             {/* Footer */}
             <View style={styles.footerContainer}>
-              <Text>
+              <Text style={styles.footerText}>
                 {isLogin
                   ? "Don't have an account?"
                   : "Already have an account?"}
@@ -370,78 +460,58 @@ export default function Auth() {
                 </Text>
               </Pressable>
             </View>
-          </ScrollView>
-        </SafeAreaView>
-      </TouchableWithoutFeedback>
+          </Animated.View>
+        </KeyboardAwareScrollView>
+      </SafeAreaView>
       <LoadingOverlay visible={loading} mode="modal" />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: theme.colors.bg,
+  },
+  safeArea: {
+    flex: 1,
+    backgroundColor: theme.colors.bg,
+  },
   container: {
     flexGrow: 1,
-    paddingTop: 20,
+    paddingHorizontal: 16,
+    paddingTop: CONTENT_PADDING_TOP,
     paddingBottom: 40,
+  },
+  headerBlock: {
     alignItems: "center",
-    justifyContent: "space-around",
-    backgroundColor: theme.colors.beige2,
+    marginBottom: 28,
+  },
+  brand: {
+    fontFamily: "Pacifico_400Regular",
+    fontSize: 36,
+    color: theme.colors.text.primary,
+    marginBottom: 6,
   },
   title: {
-    fontFamily: theme.typography.fonts.regular,
-    fontSize: theme.typography.sizes.xxl,
+    fontSize: 15,
+    fontWeight: "500",
+    color: "#8E8E93",
   },
-  inputContainer: {
-    width: "70%",
-  },
-  buttonContainer: {
-    width: "70%",
-  },
-  textInput: {
-    borderBottomColor: "black",
-    borderBottomWidth: 1,
-    width: "100%",
-    paddingBottom: 10,
-    fontSize: theme.typography.sizes.lg,
-    color: "black",
-  },
-  inputError: {
-    borderBottomColor: theme.colors.red,
-  },
-  createAccountButton: {
-    backgroundColor: theme.colors.black,
-    paddingVertical: 18,
-    width: "100%",
-    borderRadius: 8,
+  avatarSection: {
     alignItems: "center",
-    justifyContent: "center",
+    gap: 8,
+    marginBottom: 24,
   },
-  createAccountButtonText: {
-    color: theme.colors.beige,
-    fontSize: theme.typography.sizes.md,
-  },
-  footerContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-  },
-  loginButtonText: {
-    fontWeight: "bold",
-    textDecorationLine: "underline",
-  },
-  errorContainer: {
-    minHeight: 24,
-    marginTop: 4,
-  },
-  errorText: {
-    color: theme.colors.red,
-    fontSize: 12,
+  avatarWrapper: {
+    alignSelf: "center",
+    position: "relative",
   },
   avatarContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: "#eee",
+    width: 104,
+    height: 104,
+    borderRadius: 52,
+    backgroundColor: "rgba(0, 0, 0, 0.1)",
     alignItems: "center",
     justifyContent: "center",
     alignSelf: "center",
@@ -451,25 +521,89 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
   },
-  helperText: {
-    textAlign: "center",
-    color: "#666",
-  },
   addButton: {
     position: "absolute",
     right: 0,
     bottom: 0,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: theme.colors.black,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: theme.colors.secondary,
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 2,
-    borderColor: "white",
+    borderColor: theme.colors.bg,
   },
-  avatarWrapper: {
-    alignSelf: "center",
-    position: "relative",
+  helperText: {
+    textAlign: "center",
+    fontSize: 13,
+    color: "#8E8E93",
+  },
+  form: {
+    width: "100%",
+  },
+  inputGroup: {
+    marginBottom: 16,
+  },
+  fieldLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: theme.colors.text.primary,
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  boxInput: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 12,
+    fontSize: 15,
+    color: theme.colors.text.primary,
+    backgroundColor: "rgba(0, 0, 0, 0.1)",
+    borderWidth: 1.5,
+    borderColor: "transparent",
+  },
+  inputError: {
+    borderColor: theme.colors.red,
+  },
+  errorText: {
+    color: theme.colors.red,
+    fontSize: 12,
+    marginTop: 6,
+  },
+  buttonContainer: {
+    width: "100%",
+    marginTop: 8,
+  },
+  primaryButton: {
+    backgroundColor: theme.colors.secondary,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  disabledButton: {
+    opacity: 0.6,
+  },
+  primaryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  footerContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    marginTop: 24,
+  },
+  footerText: {
+    fontSize: 14,
+    color: "#8E8E93",
+  },
+  loginButtonText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: theme.colors.text.primary,
+    textDecorationLine: "underline",
   },
 });

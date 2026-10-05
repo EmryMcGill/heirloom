@@ -258,7 +258,7 @@ export default function ProfileSettingsScreen() {
 
           {/* 👤 Full Name Input */}
           <View style={styles.inputGroup}>
-            <Text style={styles.fieldLabel}>Full Name</Text>
+            <Text style={styles.fieldLabel}>Username</Text>
             <TextInput
               style={styles.boxInput}
               value={fullName}
