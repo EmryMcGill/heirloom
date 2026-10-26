@@ -1,31 +1,28 @@
-import LoadingOverlay from "@/components/LoadingOverlay";
 import { theme } from "@/constants/theme";
 import { decode } from "base64-arraybuffer";
 import { File } from "expo-file-system";
-import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
-import { Plus, User } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
 import {
   Alert,
   AppState,
+  Keyboard,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from "react-native";
 import {
-  KeyboardAwareScrollView,
   useKeyboardHandler,
+  type KeyboardAwareScrollViewRef,
 } from "react-native-keyboard-controller";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
+  withTiming,
 } from "react-native-reanimated";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabase";
 
@@ -33,9 +30,6 @@ interface ValidationError {
   field: string;
   msg: string;
 }
-
-const CONTENT_PADDING_TOP = 24; // must match styles.container.paddingTop
-const SCROLL_TOP_GAP = 12;
 
 export default function Auth() {
   const { refreshProfile } = useAuth();
@@ -46,19 +40,28 @@ export default function Auth() {
   const [errors, setErrors] = useState<ValidationError[]>([]);
   const [loading, setLoading] = useState(false);
   const [isLogin, setIsLogin] = useState(false);
+  const [signupStep, setSignupStep] = useState(1); // 1: Email, 2: Password, 3: Username, 4: Avatar
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
+  const [focusedInput, setFocusedInput] = useState<string | null>(null);
 
   // Input focus refs
   const emailRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
+  const nameRef = useRef<TextInput>(null);
 
   // Scroll & layout position tracking
-  const scrollRef = useRef<ScrollView>(null);
-  const fieldY = useRef<Record<string, number>>({});
-  const formY = useRef(0);
+  const scrollRef = useRef<KeyboardAwareScrollViewRef>(null);
+  const insets = useSafeAreaInsets();
 
-  // Track keyboard height smoothly during interactive gestures/drags
+  // Track keyboard height smoothly
   const keyboardHeight = useSharedValue(0);
+
+  // Animation values for steps
+  const stepAnim = useSharedValue(1);
+
+  useEffect(() => {
+    stepAnim.value = withTiming(signupStep, { duration: 300 });
+  }, [signupStep]);
 
   useKeyboardHandler({
     onMove: (e) => {
@@ -71,23 +74,17 @@ export default function Auth() {
     },
   });
 
-  // Dynamically pad the scroll content frame-by-frame as the keyboard moves
-  const animatedPaddingStyle = useAnimatedStyle(() => ({
-    paddingBottom: 220 + keyboardHeight.value,
-  }));
-
-  const scrollFieldToTop = (key: string) => {
-    setTimeout(() => {
-      const y = fieldY.current[key];
-      if (y === undefined) return;
-      scrollRef.current?.scrollTo({
-        y: Math.max(
-          0,
-          formY.current + y + CONTENT_PADDING_TOP - SCROLL_TOP_GAP,
-        ),
-        animated: true,
-      });
-    }, 50);
+  const getStepAnimatedStyle = (stepIndex: number) => {
+    return useAnimatedStyle(() => {
+      const distance = stepAnim.value - stepIndex;
+      return {
+        transform: [{ translateX: distance * -350 }],
+        opacity: Math.abs(distance) > 0.5 ? 0 : 1,
+        position: Math.abs(distance) > 0.5 ? "absolute" : "relative",
+        width: "100%",
+        display: Math.abs(distance) > 1.5 ? "none" : "flex",
+      };
+    });
   };
 
   useEffect(() => {
@@ -158,8 +155,37 @@ export default function Auth() {
     }
   }
 
-  const validateField = (field: string, value: string) => {
-    setErrors((prev) => prev.filter((e) => e.field !== field));
+  const advanceSignup = () => {
+    if (signupStep === 1) {
+      const trimmedEmail = email.trim();
+      if (!trimmedEmail) {
+        setErrors([{ field: "email", msg: "Please enter an email" }]);
+        return;
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+        setErrors([{ field: "email", msg: "Email is invalid" }]);
+        return;
+      }
+    } else if (signupStep === 2) {
+      if (!password) {
+        setErrors([{ field: "password", msg: "Please enter a password" }]);
+        return;
+      }
+      if (password.length < 6) {
+        setErrors([
+          { field: "password", msg: "Password must be at least 6 characters" },
+        ]);
+        return;
+      }
+    } else if (signupStep === 3) {
+      if (!name.trim()) {
+        setErrors([{ field: "name", msg: "Please enter a username" }]);
+        return;
+      }
+    }
+
+    setErrors([]);
+    setSignupStep((step) => step + 1);
   };
 
   async function signInWithEmail() {
@@ -184,40 +210,6 @@ export default function Auth() {
   async function signUpWithEmail() {
     const trimmedName = name.trim();
     const trimmedEmail = email.trim();
-    const validationErrors: ValidationError[] = [];
-
-    if (trimmedName.length === 0) {
-      validationErrors.push({
-        field: "name",
-        msg: "Please enter a username",
-      });
-    }
-
-    if (trimmedEmail.length === 0) {
-      validationErrors.push({ field: "email", msg: "Please enter an email" });
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (trimmedEmail.length > 0 && !emailRegex.test(trimmedEmail)) {
-      validationErrors.push({ field: "email", msg: "Email is invalid" });
-    }
-
-    if (password.length === 0) {
-      validationErrors.push({
-        field: "password",
-        msg: "Please enter a password",
-      });
-    } else if (password.length < 6) {
-      validationErrors.push({
-        field: "password",
-        msg: "Password must be at least 6 characters",
-      });
-    }
-
-    if (validationErrors.length > 0) {
-      setErrors(validationErrors);
-      return;
-    }
 
     setLoading(true);
     const {
@@ -261,210 +253,188 @@ export default function Auth() {
     if (loading) return;
     if (isLogin) {
       signInWithEmail();
-    } else {
+    } else if (signupStep === 4) {
       signUpWithEmail();
+    } else {
+      advanceSignup();
     }
   };
 
-  const nameError = errors.find((e) => e.field === "name");
   const emailError = errors.find((e) => e.field === "email");
   const passwordError = errors.find((e) => e.field === "password");
+  const nameError = errors.find((e) => e.field === "name");
 
   return (
-    <View style={styles.root}>
-      <SafeAreaView style={styles.safeArea}>
-        <KeyboardAwareScrollView
-          ref={scrollRef}
-          keyboardDismissMode="on-drag"
-          style={{ flex: 1 }}
-          contentContainerStyle={styles.container}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          bottomOffset={120}
-        >
-          <Animated.View style={animatedPaddingStyle}>
-            {/* Header */}
-            <View style={styles.headerBlock}>
-              <Text style={styles.brand}>Spurtle</Text>
-              <Text style={styles.title}>
-                {isLogin ? "Welcome back" : "Create an account"}
+    <Pressable
+      style={[styles.root, { paddingTop: insets.top }]}
+      onPress={Keyboard.dismiss}
+    >
+      {/* Header */}
+      <Text style={styles.title}>Spurtle</Text>
+      <Text style={styles.subTitle}>
+        {isLogin ? "Welcome back" : "Create an account"}
+      </Text>
+
+      <View style={styles.formContainer}>
+        {/* Step 1: Email */}
+        <Animated.View style={[styles.stepWrapper, getStepAnimatedStyle(1)]}>
+          <Text style={styles.fieldLabel}>EMAIL</Text>
+          <TextInput
+            ref={emailRef}
+            style={[
+              styles.boxInput,
+              focusedInput === "email" && styles.inputFocus,
+              emailError && styles.inputError,
+            ]}
+            onFocus={() => setFocusedInput("email")}
+            onBlur={() => setFocusedInput(null)}
+            onChangeText={(text) => {
+              setEmail(text);
+              setErrors((prev) => prev.filter((e) => e.field !== "email"));
+            }}
+            autoFocus={!isLogin && signupStep === 1}
+            value={email}
+            placeholder="name@example.com"
+            placeholderTextColor="#8E8E93"
+            autoCapitalize="none"
+            keyboardType="email-address"
+            textContentType="emailAddress"
+            autoComplete="email"
+            returnKeyType="next"
+            onSubmitEditing={handleSubmit}
+          />
+          {emailError && <Text style={styles.errorText}>{emailError.msg}</Text>}
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.primaryButton,
+              pressed && { opacity: 0.85 },
+              loading && styles.disabledButton,
+            ]}
+            disabled={loading}
+            onPress={handleSubmit}
+          >
+            <Text style={styles.primaryButtonText}>Continue</Text>
+          </Pressable>
+        </Animated.View>
+
+        {/* Step 2: Password */}
+        <Animated.View style={[styles.stepWrapper, getStepAnimatedStyle(2)]}>
+          <Text style={styles.fieldLabel}>PASSWORD</Text>
+          <TextInput
+            ref={passwordRef}
+            style={[
+              styles.boxInput,
+              focusedInput === "password" && styles.inputFocus,
+              passwordError && styles.inputError,
+            ]}
+            onFocus={() => setFocusedInput("password")}
+            onBlur={() => setFocusedInput(null)}
+            onChangeText={(text) => {
+              setPassword(text);
+              setErrors((prev) => prev.filter((e) => e.field !== "password"));
+            }}
+            secureTextEntry
+            autoFocus={signupStep === 2}
+            value={password}
+            placeholder="At least 6 characters"
+            placeholderTextColor="#8E8E93"
+            returnKeyType="next"
+            onSubmitEditing={handleSubmit}
+          />
+          {passwordError && (
+            <Text style={styles.errorText}>{passwordError.msg}</Text>
+          )}
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.primaryButton,
+              pressed && { opacity: 0.85 },
+              loading && styles.disabledButton,
+            ]}
+            disabled={loading}
+            onPress={handleSubmit}
+          >
+            <Text style={styles.primaryButtonText}>Continue</Text>
+          </Pressable>
+
+          <Pressable onPress={() => setSignupStep((step) => step - 1)}>
+            <Text style={styles.backText}>Back</Text>
+          </Pressable>
+        </Animated.View>
+
+        {/* Step 3: Username */}
+        <Animated.View style={[styles.stepWrapper, getStepAnimatedStyle(3)]}>
+          <Text style={styles.fieldLabel}>USERNAME</Text>
+          <TextInput
+            ref={nameRef}
+            style={[
+              styles.boxInput,
+              focusedInput === "name" && styles.inputFocus,
+              nameError && styles.inputError,
+            ]}
+            onFocus={() => setFocusedInput("name")}
+            onBlur={() => setFocusedInput(null)}
+            onChangeText={(text) => {
+              setName(text);
+              setErrors((prev) => prev.filter((e) => e.field !== "name"));
+            }}
+            autoFocus={signupStep === 3}
+            value={name}
+            placeholder="Your username"
+            placeholderTextColor="#8E8E93"
+            autoCapitalize="words"
+            textContentType="name"
+            autoComplete="name"
+            returnKeyType="next"
+            onSubmitEditing={handleSubmit}
+          />
+          {nameError && <Text style={styles.errorText}>{nameError.msg}</Text>}
+          <Pressable
+            style={({ pressed }) => [
+              styles.primaryButton,
+              pressed && { opacity: 0.85 },
+              loading && styles.disabledButton,
+            ]}
+            disabled={loading}
+            onPress={handleSubmit}
+          >
+            <Text style={styles.primaryButtonText}>Continue</Text>
+          </Pressable>
+          <Pressable onPress={() => setSignupStep((step) => step - 1)}>
+            <Text style={styles.backText}>Back</Text>
+          </Pressable>
+        </Animated.View>
+
+        {/* Step 4: Avatar Import */}
+        <Animated.View style={[styles.stepWrapper, getStepAnimatedStyle(4)]}>
+          <Text style={styles.fieldLabel}>AVATAR (OPTIONAL)</Text>
+          <Pressable style={styles.avatarPicker} onPress={pickAvatar}>
+            {avatarUri ? (
+              <Text style={styles.avatarPickedText}>Avatar Selected ✓</Text>
+            ) : (
+              <Text style={styles.avatarPlaceholderText}>
+                Tap to choose a photo
               </Text>
-            </View>
-
-            {/* Avatar picker */}
-            {!isLogin && (
-              <View style={styles.avatarSection}>
-                <View style={styles.avatarWrapper}>
-                  <TouchableOpacity
-                    style={styles.avatarContainer}
-                    onPress={pickAvatar}
-                    activeOpacity={0.85}
-                  >
-                    {avatarUri ? (
-                      <Image
-                        source={{ uri: avatarUri }}
-                        style={styles.avatar}
-                        contentFit="cover"
-                      />
-                    ) : (
-                      <User size={48} color="#8E8E93" />
-                    )}
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.addButton}
-                    onPress={pickAvatar}
-                    activeOpacity={0.85}
-                  >
-                    <Plus size={16} color="#FFFFFF" />
-                  </TouchableOpacity>
-                </View>
-
-                <Text style={styles.helperText}>
-                  Tap to add a profile photo
-                </Text>
-              </View>
             )}
-
-            {/* Inputs */}
-            <View
-              style={styles.form}
-              onLayout={(e) => (formY.current = e.nativeEvent.layout.y)}
-            >
-              {!isLogin && (
-                <View
-                  style={styles.inputGroup}
-                  onLayout={(e) =>
-                    (fieldY.current.name = e.nativeEvent.layout.y)
-                  }
-                >
-                  <Text style={styles.fieldLabel}>USERNAME</Text>
-                  <TextInput
-                    style={[styles.boxInput, nameError && styles.inputError]}
-                    onChangeText={(text) => {
-                      setName(text);
-                      validateField("name", text);
-                    }}
-                    onFocus={() => scrollFieldToTop("name")}
-                    value={name}
-                    placeholder="Your username"
-                    placeholderTextColor="#8E8E93"
-                    autoCapitalize="words"
-                    textContentType="name"
-                    autoComplete="name"
-                    returnKeyType="next"
-                    onSubmitEditing={() => emailRef.current?.focus()}
-                    blurOnSubmit={false}
-                  />
-                  {nameError && (
-                    <Text style={styles.errorText}>{nameError.msg}</Text>
-                  )}
-                </View>
-              )}
-
-              <View
-                style={styles.inputGroup}
-                onLayout={(e) =>
-                  (fieldY.current.email = e.nativeEvent.layout.y)
-                }
-              >
-                <Text style={styles.fieldLabel}>EMAIL</Text>
-                <TextInput
-                  ref={emailRef}
-                  style={[styles.boxInput, emailError && styles.inputError]}
-                  onChangeText={(text) => {
-                    setEmail(text);
-                    validateField("email", text);
-                  }}
-                  onFocus={() => scrollFieldToTop("email")}
-                  value={email}
-                  placeholder="you@example.com"
-                  placeholderTextColor="#8E8E93"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  textContentType="emailAddress"
-                  autoComplete="email"
-                  returnKeyType="next"
-                  onSubmitEditing={() => passwordRef.current?.focus()}
-                  blurOnSubmit={false}
-                />
-                {emailError && (
-                  <Text style={styles.errorText}>{emailError.msg}</Text>
-                )}
-              </View>
-
-              <View
-                style={styles.inputGroup}
-                onLayout={(e) =>
-                  (fieldY.current.password = e.nativeEvent.layout.y)
-                }
-              >
-                <Text style={styles.fieldLabel}>PASSWORD</Text>
-                <TextInput
-                  ref={passwordRef}
-                  style={[styles.boxInput, passwordError && styles.inputError]}
-                  onChangeText={(text) => {
-                    setPassword(text);
-                    validateField("password", text);
-                  }}
-                  onFocus={() => scrollFieldToTop("password")}
-                  value={password}
-                  secureTextEntry={true}
-                  placeholder="At least 6 characters"
-                  placeholderTextColor="#8E8E93"
-                  autoCapitalize="none"
-                  textContentType={isLogin ? "password" : "newPassword"}
-                  autoComplete={isLogin ? "current-password" : "new-password"}
-                  returnKeyType="go"
-                  onSubmitEditing={handleSubmit}
-                />
-                {passwordError && (
-                  <Text style={styles.errorText}>{passwordError.msg}</Text>
-                )}
-              </View>
-            </View>
-
-            {/* Buttons */}
-            <View style={styles.buttonContainer}>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.primaryButton,
-                  pressed && { opacity: 0.85 },
-                  loading && styles.disabledButton,
-                ]}
-                disabled={loading}
-                onPress={handleSubmit}
-              >
-                <Text style={styles.primaryButtonText}>
-                  {isLogin ? "Login" : "Create Account"}
-                </Text>
-              </Pressable>
-            </View>
-
-            {/* Footer */}
-            <View style={styles.footerContainer}>
-              <Text style={styles.footerText}>
-                {isLogin
-                  ? "Don't have an account?"
-                  : "Already have an account?"}
-              </Text>
-              <Pressable
-                onPress={() => {
-                  setIsLogin(!isLogin);
-                  setErrors([]);
-                }}
-              >
-                <Text style={styles.loginButtonText}>
-                  {isLogin ? "Create account" : "Login"}
-                </Text>
-              </Pressable>
-            </View>
-          </Animated.View>
-        </KeyboardAwareScrollView>
-      </SafeAreaView>
-      <LoadingOverlay visible={loading} mode="modal" />
-    </View>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              styles.primaryButton,
+              pressed && { opacity: 0.85 },
+              loading && styles.disabledButton,
+            ]}
+            disabled={loading}
+            onPress={handleSubmit}
+          >
+            <Text style={styles.primaryButtonText}>Complete Sign Up</Text>
+          </Pressable>
+          <Pressable onPress={() => setSignupStep((step) => step - 1)}>
+            <Text style={styles.backText}>Back</Text>
+          </Pressable>
+        </Animated.View>
+      </View>
+    </Pressable>
   );
 }
 
@@ -472,78 +442,49 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: theme.colors.bg,
-  },
-  safeArea: {
-    flex: 1,
-    backgroundColor: theme.colors.bg,
-  },
-  container: {
-    flexGrow: 1,
-    paddingHorizontal: 16,
-    paddingTop: CONTENT_PADDING_TOP,
-    paddingBottom: 40,
-  },
-  headerBlock: {
     alignItems: "center",
-    marginBottom: 28,
   },
-  brand: {
+  title: {
     fontFamily: "Pacifico_400Regular",
     fontSize: 36,
     color: theme.colors.text.primary,
     marginBottom: 6,
   },
-  title: {
+  subTitle: {
     fontSize: 15,
     fontWeight: "500",
     color: "#8E8E93",
+    marginBottom: 20,
   },
-  avatarSection: {
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 24,
-  },
-  avatarWrapper: {
-    alignSelf: "center",
+  formContainer: {
+    width: "100%",
+    height: 220,
     position: "relative",
-  },
-  avatarContainer: {
-    width: 104,
-    height: 104,
-    borderRadius: 52,
-    backgroundColor: "rgba(0, 0, 0, 0.1)",
-    alignItems: "center",
-    justifyContent: "center",
-    alignSelf: "center",
     overflow: "hidden",
   },
-  avatar: {
-    width: "100%",
-    height: "100%",
-  },
-  addButton: {
+  stepWrapper: {
     position: "absolute",
-    right: 0,
-    bottom: 0,
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: theme.colors.secondary,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 2,
-    borderColor: theme.colors.bg,
-  },
-  helperText: {
-    textAlign: "center",
-    fontSize: 13,
-    color: "#8E8E93",
-  },
-  form: {
+    top: 0,
+    left: 0,
     width: "100%",
   },
-  inputGroup: {
-    marginBottom: 16,
+  primaryButton: {
+    backgroundColor: theme.colors.secondary,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%" - 32,
+    marginTop: 24,
+    marginHorizontal: 16,
+  },
+  primaryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  disabledButton: {
+    opacity: 0.6,
   },
   fieldLabel: {
     fontSize: 12,
@@ -551,6 +492,9 @@ const styles = StyleSheet.create({
     color: theme.colors.text.primary,
     letterSpacing: 0.5,
     marginBottom: 8,
+    width: "100%",
+    marginTop: 10,
+    marginLeft: 16,
   },
   boxInput: {
     paddingHorizontal: 14,
@@ -561,6 +505,13 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0, 0, 0, 0.1)",
     borderWidth: 1.5,
     borderColor: "transparent",
+    width: "100%" - 32,
+    marginHorizontal: 16,
+  },
+  inputFocus: {
+    outlineColor: "black",
+    outlineWidth: 2,
+    outlineOffset: 2,
   },
   inputError: {
     borderColor: theme.colors.red,
@@ -570,40 +521,31 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 6,
   },
-  buttonContainer: {
+  avatarPicker: {
     width: "100%",
-    marginTop: 8,
-  },
-  primaryButton: {
-    backgroundColor: theme.colors.secondary,
-    paddingVertical: 14,
+    height: 120,
     borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "rgba(0, 0, 0, 0.15)",
+    borderStyle: "dashed",
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.05)",
   },
-  disabledButton: {
-    opacity: 0.6,
-  },
-  primaryButtonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  footerContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 5,
-    marginTop: 24,
-  },
-  footerText: {
-    fontSize: 14,
+  avatarPlaceholderText: {
     color: "#8E8E93",
-  },
-  loginButtonText: {
     fontSize: 14,
-    fontWeight: "700",
+  },
+  avatarPickedText: {
     color: theme.colors.text.primary,
+    fontWeight: "600",
+    fontSize: 14,
+  },
+  backText: {
     textDecorationLine: "underline",
+    fontWeight: "bold",
+    fontSize: 14,
+    marginTop: 12,
+    marginLeft: 16,
   },
 });

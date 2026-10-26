@@ -2,6 +2,7 @@ in progress:
 
 todo:
 
-- input flow on forms
-- improve page loading for pages
+- should dismiss keyboard on login
+
+- google sign up ??
 - onboarding screens

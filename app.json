@@ -1,16 +1,19 @@
 {
   "expo": {
-    "name": "heirloom",
+    "name": "spurtle",
     "slug": "heirloom",
     "owner": "emry",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "heirloom",
+    "scheme": "spurtle",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.heirloom.app"
+      "bundleIdentifier": "com.emrymcgill.spurtle",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -30,10 +33,27 @@
       "expo-image",
       "expo-splash-screen",
       "expo-status-bar",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "extraPods": [
+              { "name": "GoogleUtilities", "modular_headers": true },
+              { "name": "RecaptchaInterop", "modular_headers": true }
+            ]
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "87e2b8dd-1a00-4b54-be66-67fe5237beb9"
+      }
     }
   }
 }
