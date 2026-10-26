@@ -37,16 +37,18 @@ export default function Auth() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [errors, setErrors] = useState<ValidationError[]>([]);
   const [loading, setLoading] = useState(false);
   const [isLogin, setIsLogin] = useState(false);
-  const [signupStep, setSignupStep] = useState(1); // 1: Email, 2: Password, 3: Username, 4: Avatar
+  const [signupStep, setSignupStep] = useState(1); // 1: Email, 2: Password, 3: Confirm Password, 4: Username, 5: Avatar
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
 
   // Input focus refs
   const emailRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
+  const confirmPasswordRef = useRef<TextInput>(null);
   const nameRef = useRef<TextInput>(null);
 
   // Scroll & layout position tracking
@@ -73,9 +75,11 @@ export default function Auth() {
       } else if (signupStep === 2) {
         passwordRef.current?.focus();
       } else if (signupStep === 3) {
+        confirmPasswordRef.current?.focus();
+      } else if (signupStep === 4) {
         nameRef.current?.focus();
       }
-    }, 100); // Small delay to sync cleanly with the step transition animation
+    }, 100);
 
     return () => clearTimeout(timer);
   }, [signupStep, isLogin]);
@@ -172,37 +176,88 @@ export default function Auth() {
     }
   }
 
-  const advanceSignup = () => {
+  const advanceSignup = async () => {
+    setLoading(true);
+
     if (signupStep === 1) {
       const trimmedEmail = email.trim();
       if (!trimmedEmail) {
         setErrors([{ field: "email", msg: "Please enter an email" }]);
+        setLoading(false);
         return;
       }
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
         setErrors([{ field: "email", msg: "Email is invalid" }]);
+        setLoading(false);
+        return;
+      }
+
+      const { data: emailExists, error: emailCheckError } = await supabase.rpc(
+        "check_email_exists",
+        { email_to_check: trimmedEmail },
+      );
+
+      if (emailCheckError) {
+        console.error("Error checking email uniqueness:", emailCheckError);
+      }
+
+      if (emailExists) {
+        setErrors([{ field: "email", msg: "This email is already in use" }]);
+        setLoading(false);
         return;
       }
     } else if (signupStep === 2) {
       if (!password) {
         setErrors([{ field: "password", msg: "Please enter a password" }]);
+        setLoading(false);
         return;
       }
       if (password.length < 6) {
         setErrors([
           { field: "password", msg: "Password must be at least 6 characters" },
         ]);
+        setLoading(false);
         return;
       }
     } else if (signupStep === 3) {
-      if (!name.trim()) {
+      if (!confirmPassword) {
+        setErrors([
+          { field: "confirmPassword", msg: "Please confirm your password" },
+        ]);
+        setLoading(false);
+        return;
+      }
+      if (password !== confirmPassword) {
+        setErrors([
+          { field: "confirmPassword", msg: "Passwords do not match" },
+        ]);
+        setLoading(false);
+        return;
+      }
+    } else if (signupStep === 4) {
+      const trimmedName = name.trim();
+      if (!trimmedName) {
         setErrors([{ field: "name", msg: "Please enter a username" }]);
+        setLoading(false);
+        return;
+      }
+
+      const { data: existingName } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("full_name", trimmedName)
+        .maybeSingle();
+
+      if (existingName) {
+        setErrors([{ field: "name", msg: "This username is already taken" }]);
+        setLoading(false);
         return;
       }
     }
 
     setErrors([]);
     setSignupStep((step) => step + 1);
+    setLoading(false);
   };
 
   async function signInWithEmail() {
@@ -270,7 +325,7 @@ export default function Auth() {
     if (loading) return;
     if (isLogin) {
       signInWithEmail();
-    } else if (signupStep === 4) {
+    } else if (signupStep === 5) {
       signUpWithEmail();
     } else {
       advanceSignup();
@@ -279,6 +334,9 @@ export default function Auth() {
 
   const emailError = errors.find((e) => e.field === "email");
   const passwordError = errors.find((e) => e.field === "password");
+  const confirmPasswordError = errors.find(
+    (e) => e.field === "confirmPassword",
+  );
   const nameError = errors.find((e) => e.field === "name");
 
   return (
@@ -330,7 +388,9 @@ export default function Auth() {
             disabled={loading}
             onPress={handleSubmit}
           >
-            <Text style={styles.primaryButtonText}>Continue</Text>
+            <Text style={styles.primaryButtonText}>
+              {loading ? "Checking..." : "Continue"}
+            </Text>
           </Pressable>
         </Animated.View>
 
@@ -381,8 +441,57 @@ export default function Auth() {
           </Pressable>
         </Animated.View>
 
-        {/* Step 3: Username */}
+        {/* Step 3: Confirm Password */}
         <Animated.View style={[styles.stepWrapper, getStepAnimatedStyle(3)]}>
+          <Text style={styles.fieldLabel}>CONFIRM PASSWORD</Text>
+          <TextInput
+            ref={confirmPasswordRef}
+            style={[
+              styles.boxInput,
+              focusedInput === "confirmPassword" && styles.inputFocus,
+              confirmPasswordError && styles.inputError,
+            ]}
+            onFocus={() => setFocusedInput("confirmPassword")}
+            onBlur={() => setFocusedInput(null)}
+            onChangeText={(text) => {
+              setConfirmPassword(text);
+              setErrors((prev) =>
+                prev.filter((e) => e.field !== "confirmPassword"),
+              );
+            }}
+            secureTextEntry
+            value={confirmPassword}
+            placeholder="Re-enter your password"
+            placeholderTextColor="#8E8E93"
+            returnKeyType="next"
+            onSubmitEditing={handleSubmit}
+          />
+          {confirmPasswordError && (
+            <Text style={styles.errorText}>{confirmPasswordError.msg}</Text>
+          )}
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.primaryButton,
+              pressed && { opacity: 0.85 },
+              loading && styles.disabledButton,
+            ]}
+            disabled={loading}
+            onPress={handleSubmit}
+          >
+            <Text style={styles.primaryButtonText}>Continue</Text>
+          </Pressable>
+
+          <Pressable
+            style={styles.backButtonContainer}
+            onPress={() => setSignupStep((step) => step - 1)}
+          >
+            <Text style={styles.backText}>Back</Text>
+          </Pressable>
+        </Animated.View>
+
+        {/* Step 4: Username */}
+        <Animated.View style={[styles.stepWrapper, getStepAnimatedStyle(4)]}>
           <Text style={styles.fieldLabel}>USERNAME</Text>
           <TextInput
             ref={nameRef}
@@ -416,7 +525,9 @@ export default function Auth() {
             disabled={loading}
             onPress={handleSubmit}
           >
-            <Text style={styles.primaryButtonText}>Continue</Text>
+            <Text style={styles.primaryButtonText}>
+              {loading ? "Checking..." : "Continue"}
+            </Text>
           </Pressable>
           <Pressable
             style={styles.backButtonContainer}
@@ -426,8 +537,8 @@ export default function Auth() {
           </Pressable>
         </Animated.View>
 
-        {/* Step 4: Avatar Import */}
-        <Animated.View style={[styles.stepWrapper, getStepAnimatedStyle(4)]}>
+        {/* Step 5: Avatar Import */}
+        <Animated.View style={[styles.stepWrapper, getStepAnimatedStyle(5)]}>
           <Text style={styles.fieldLabel}>AVATAR (OPTIONAL)</Text>
           <Pressable style={styles.avatarPicker} onPress={pickAvatar}>
             {avatarUri ? (
@@ -447,7 +558,9 @@ export default function Auth() {
             disabled={loading}
             onPress={handleSubmit}
           >
-            <Text style={styles.primaryButtonText}>Complete Sign Up</Text>
+            <Text style={styles.primaryButtonText}>
+              {loading ? "Completing..." : "Complete Sign Up"}
+            </Text>
           </Pressable>
           <Pressable onPress={() => setSignupStep((step) => step - 1)}>
             <Text style={styles.backText}>Back</Text>
