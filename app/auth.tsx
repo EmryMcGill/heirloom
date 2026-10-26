@@ -63,6 +63,23 @@ export default function Auth() {
     stepAnim.value = withTiming(signupStep, { duration: 300 });
   }, [signupStep]);
 
+  // Imperatively focus inputs when the step changes
+  useEffect(() => {
+    if (isLogin) return;
+
+    const timer = setTimeout(() => {
+      if (signupStep === 1) {
+        emailRef.current?.focus();
+      } else if (signupStep === 2) {
+        passwordRef.current?.focus();
+      } else if (signupStep === 3) {
+        nameRef.current?.focus();
+      }
+    }, 100); // Small delay to sync cleanly with the step transition animation
+
+    return () => clearTimeout(timer);
+  }, [signupStep, isLogin]);
+
   useKeyboardHandler({
     onMove: (e) => {
       "worklet";
@@ -292,7 +309,6 @@ export default function Auth() {
               setEmail(text);
               setErrors((prev) => prev.filter((e) => e.field !== "email"));
             }}
-            autoFocus={!isLogin && signupStep === 1}
             value={email}
             placeholder="name@example.com"
             placeholderTextColor="#8E8E93"
@@ -335,7 +351,6 @@ export default function Auth() {
               setErrors((prev) => prev.filter((e) => e.field !== "password"));
             }}
             secureTextEntry
-            autoFocus={signupStep === 2}
             value={password}
             placeholder="At least 6 characters"
             placeholderTextColor="#8E8E93"
@@ -358,7 +373,10 @@ export default function Auth() {
             <Text style={styles.primaryButtonText}>Continue</Text>
           </Pressable>
 
-          <Pressable onPress={() => setSignupStep((step) => step - 1)}>
+          <Pressable
+            style={styles.backButtonContainer}
+            onPress={() => setSignupStep((step) => step - 1)}
+          >
             <Text style={styles.backText}>Back</Text>
           </Pressable>
         </Animated.View>
@@ -379,7 +397,6 @@ export default function Auth() {
               setName(text);
               setErrors((prev) => prev.filter((e) => e.field !== "name"));
             }}
-            autoFocus={signupStep === 3}
             value={name}
             placeholder="Your username"
             placeholderTextColor="#8E8E93"
@@ -401,7 +418,10 @@ export default function Auth() {
           >
             <Text style={styles.primaryButtonText}>Continue</Text>
           </Pressable>
-          <Pressable onPress={() => setSignupStep((step) => step - 1)}>
+          <Pressable
+            style={styles.backButtonContainer}
+            onPress={() => setSignupStep((step) => step - 1)}
+          >
             <Text style={styles.backText}>Back</Text>
           </Pressable>
         </Animated.View>
@@ -520,6 +540,7 @@ const styles = StyleSheet.create({
     color: theme.colors.red,
     fontSize: 12,
     marginTop: 6,
+    marginLeft: 16,
   },
   avatarPicker: {
     width: "100%",
@@ -540,6 +561,9 @@ const styles = StyleSheet.create({
     color: theme.colors.text.primary,
     fontWeight: "600",
     fontSize: 14,
+  },
+  backButtonContainer: {
+    alignSelf: "flex-start",
   },
   backText: {
     textDecorationLine: "underline",
