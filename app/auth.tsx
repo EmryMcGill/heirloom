@@ -1,7 +1,9 @@
 import { theme } from "@/constants/theme";
 import { decode } from "base64-arraybuffer";
 import { File } from "expo-file-system";
+import { Image as ExpoImage } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
+import { Camera, User } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
 import {
   Alert,
@@ -11,6 +13,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from "react-native";
 import {
@@ -65,7 +68,7 @@ export default function Auth() {
     stepAnim.value = withTiming(signupStep, { duration: 300 });
   }, [signupStep]);
 
-  // Imperatively focus inputs when the step changes
+  // Imperatively focus inputs and dismiss keyboard on final step
   useEffect(() => {
     if (isLogin) return;
 
@@ -78,6 +81,8 @@ export default function Auth() {
         confirmPasswordRef.current?.focus();
       } else if (signupStep === 4) {
         nameRef.current?.focus();
+      } else if (signupStep === 5) {
+        Keyboard.dismiss();
       }
     }, 100);
 
@@ -540,15 +545,30 @@ export default function Auth() {
         {/* Step 5: Avatar Import */}
         <Animated.View style={[styles.stepWrapper, getStepAnimatedStyle(5)]}>
           <Text style={styles.fieldLabel}>AVATAR (OPTIONAL)</Text>
-          <Pressable style={styles.avatarPicker} onPress={pickAvatar}>
-            {avatarUri ? (
-              <Text style={styles.avatarPickedText}>Avatar Selected ✓</Text>
-            ) : (
-              <Text style={styles.avatarPlaceholderText}>
-                Tap to choose a photo
-              </Text>
-            )}
-          </Pressable>
+          <View style={styles.avatarPickerContainer}>
+            <TouchableOpacity
+              style={styles.avatarWrapper}
+              onPress={pickAvatar}
+              activeOpacity={0.85}
+            >
+              {avatarUri ? (
+                <ExpoImage
+                  source={{ uri: avatarUri }}
+                  style={styles.avatarImage}
+                  contentFit="cover"
+                />
+              ) : (
+                <View style={styles.avatarPlaceholder}>
+                  <User size={36} color="#8E8E93" />
+                </View>
+              )}
+              <View style={styles.cameraBadge}>
+                <Camera size={13} color="#FFFFFF" />
+              </View>
+            </TouchableOpacity>
+            <Text style={styles.changePhotoText}>Tap to change photo</Text>
+          </View>
+
           <Pressable
             style={({ pressed }) => [
               styles.primaryButton,
@@ -562,7 +582,10 @@ export default function Auth() {
               {loading ? "Completing..." : "Complete Sign Up"}
             </Text>
           </Pressable>
-          <Pressable onPress={() => setSignupStep((step) => step - 1)}>
+          <Pressable
+            style={styles.backButtonContainer}
+            onPress={() => setSignupStep((step) => step - 1)}
+          >
             <Text style={styles.backText}>Back</Text>
           </Pressable>
         </Animated.View>
@@ -591,7 +614,7 @@ const styles = StyleSheet.create({
   },
   formContainer: {
     width: "100%",
-    height: 220,
+    height: 300,
     position: "relative",
     overflow: "hidden",
   },
@@ -655,25 +678,48 @@ const styles = StyleSheet.create({
     marginTop: 6,
     marginLeft: 16,
   },
-  avatarPicker: {
-    width: "100%",
-    height: 120,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: "rgba(0, 0, 0, 0.15)",
-    borderStyle: "dashed",
+  avatarPickerContainer: {
+    alignItems: "center",
+    marginBottom: 6,
+    marginTop: 10,
+  },
+  avatarWrapper: {
+    position: "relative",
+    width: 84,
+    height: 84,
+  },
+  avatarImage: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    backgroundColor: "#E1E1E1",
+  },
+  avatarPlaceholder: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    backgroundColor: "#E1E1E1",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.05)",
   },
-  avatarPlaceholderText: {
+  cameraBadge: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    backgroundColor: theme.colors.secondary,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: theme.colors.bg,
+  },
+  changePhotoText: {
     color: "#8E8E93",
-    fontSize: 14,
-  },
-  avatarPickedText: {
-    color: theme.colors.text.primary,
-    fontWeight: "600",
-    fontSize: 14,
+    fontSize: 13,
+    marginTop: 8,
+    fontWeight: "500",
   },
   backButtonContainer: {
     alignSelf: "flex-start",

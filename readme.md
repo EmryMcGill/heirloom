@@ -2,7 +2,9 @@ in progress:
 
 todo:
 
-- should dismiss keyboard on login
+auth flow
+
+- avatar section styles + skip button
 
 - google sign up ??
 - onboarding screens
