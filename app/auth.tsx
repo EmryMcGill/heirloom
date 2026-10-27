@@ -53,6 +53,7 @@ export default function Auth() {
   const passwordRef = useRef<TextInput>(null);
   const confirmPasswordRef = useRef<TextInput>(null);
   const nameRef = useRef<TextInput>(null);
+  const loginPasswordRef = useRef<TextInput>(null);
 
   // Scroll & layout position tracking
   const scrollRef = useRef<KeyboardAwareScrollViewRef>(null);
@@ -61,8 +62,64 @@ export default function Auth() {
   // Track keyboard height smoothly
   const keyboardHeight = useSharedValue(0);
 
-  // Animation values for steps
+  // Animation values for steps - MUST be called unconditionally at top-level
   const stepAnim = useSharedValue(1);
+
+  // Unconditional animated style factories
+  const styleStep1 = useAnimatedStyle(() => {
+    const distance = stepAnim.value - 1;
+    return {
+      transform: [{ translateX: distance * -350 }],
+      opacity: Math.abs(distance) > 0.5 ? 0 : 1,
+      position: Math.abs(distance) > 0.5 ? "absolute" : "relative",
+      width: "100%",
+      display: Math.abs(distance) > 1.5 ? "none" : "flex",
+    };
+  });
+
+  const styleStep2 = useAnimatedStyle(() => {
+    const distance = stepAnim.value - 2;
+    return {
+      transform: [{ translateX: distance * -350 }],
+      opacity: Math.abs(distance) > 0.5 ? 0 : 1,
+      position: Math.abs(distance) > 0.5 ? "absolute" : "relative",
+      width: "100%",
+      display: Math.abs(distance) > 1.5 ? "none" : "flex",
+    };
+  });
+
+  const styleStep3 = useAnimatedStyle(() => {
+    const distance = stepAnim.value - 3;
+    return {
+      transform: [{ translateX: distance * -350 }],
+      opacity: Math.abs(distance) > 0.5 ? 0 : 1,
+      position: Math.abs(distance) > 0.5 ? "absolute" : "relative",
+      width: "100%",
+      display: Math.abs(distance) > 1.5 ? "none" : "flex",
+    };
+  });
+
+  const styleStep4 = useAnimatedStyle(() => {
+    const distance = stepAnim.value - 4;
+    return {
+      transform: [{ translateX: distance * -350 }],
+      opacity: Math.abs(distance) > 0.5 ? 0 : 1,
+      position: Math.abs(distance) > 0.5 ? "absolute" : "relative",
+      width: "100%",
+      display: Math.abs(distance) > 1.5 ? "none" : "flex",
+    };
+  });
+
+  const styleStep5 = useAnimatedStyle(() => {
+    const distance = stepAnim.value - 5;
+    return {
+      transform: [{ translateX: distance * -350 }],
+      opacity: Math.abs(distance) > 0.5 ? 0 : 1,
+      position: Math.abs(distance) > 0.5 ? "absolute" : "relative",
+      width: "100%",
+      display: Math.abs(distance) > 1.5 ? "none" : "flex",
+    };
+  });
 
   useEffect(() => {
     stepAnim.value = withTiming(signupStep, { duration: 300 });
@@ -70,19 +127,21 @@ export default function Auth() {
 
   // Imperatively focus inputs and dismiss keyboard on final step
   useEffect(() => {
-    if (isLogin) return;
-
     const timer = setTimeout(() => {
-      if (signupStep === 1) {
+      if (isLogin) {
         emailRef.current?.focus();
-      } else if (signupStep === 2) {
-        passwordRef.current?.focus();
-      } else if (signupStep === 3) {
-        confirmPasswordRef.current?.focus();
-      } else if (signupStep === 4) {
-        nameRef.current?.focus();
-      } else if (signupStep === 5) {
-        Keyboard.dismiss();
+      } else {
+        if (signupStep === 1) {
+          emailRef.current?.focus();
+        } else if (signupStep === 2) {
+          passwordRef.current?.focus();
+        } else if (signupStep === 3) {
+          confirmPasswordRef.current?.focus();
+        } else if (signupStep === 4) {
+          nameRef.current?.focus();
+        } else if (signupStep === 5) {
+          Keyboard.dismiss();
+        }
       }
     }, 100);
 
@@ -99,19 +158,6 @@ export default function Auth() {
       keyboardHeight.value = e.height;
     },
   });
-
-  const getStepAnimatedStyle = (stepIndex: number) => {
-    return useAnimatedStyle(() => {
-      const distance = stepAnim.value - stepIndex;
-      return {
-        transform: [{ translateX: distance * -350 }],
-        opacity: Math.abs(distance) > 0.5 ? 0 : 1,
-        position: Math.abs(distance) > 0.5 ? "absolute" : "relative",
-        width: "100%",
-        display: Math.abs(distance) > 1.5 ? "none" : "flex",
-      };
-    });
-  };
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {
@@ -337,6 +383,12 @@ export default function Auth() {
     }
   };
 
+  const toggleAuthMode = () => {
+    setIsLogin(!isLogin);
+    setErrors([]);
+    setSignupStep(1);
+  };
+
   const emailError = errors.find((e) => e.field === "email");
   const passwordError = errors.find((e) => e.field === "password");
   const confirmPasswordError = errors.find(
@@ -356,239 +408,325 @@ export default function Auth() {
       </Text>
 
       <View style={styles.formContainer}>
-        {/* Step 1: Email */}
-        <Animated.View style={[styles.stepWrapper, getStepAnimatedStyle(1)]}>
-          <Text style={styles.fieldLabel}>EMAIL</Text>
-          <TextInput
-            ref={emailRef}
-            style={[
-              styles.boxInput,
-              focusedInput === "email" && styles.inputFocus,
-              emailError && styles.inputError,
-            ]}
-            onFocus={() => setFocusedInput("email")}
-            onBlur={() => setFocusedInput(null)}
-            onChangeText={(text) => {
-              setEmail(text);
-              setErrors((prev) => prev.filter((e) => e.field !== "email"));
-            }}
-            value={email}
-            placeholder="name@example.com"
-            placeholderTextColor="#8E8E93"
-            autoCapitalize="none"
-            keyboardType="email-address"
-            textContentType="emailAddress"
-            autoComplete="email"
-            returnKeyType="next"
-            onSubmitEditing={handleSubmit}
-          />
-          {emailError && <Text style={styles.errorText}>{emailError.msg}</Text>}
+        {/* Login View */}
+        {isLogin ? (
+          <View style={styles.stepWrapper}>
+            <Text style={styles.fieldLabel}>EMAIL</Text>
+            <TextInput
+              ref={emailRef}
+              style={[
+                styles.boxInput,
+                focusedInput === "email" && styles.inputFocus,
+                emailError && styles.inputError,
+              ]}
+              onFocus={() => setFocusedInput("email")}
+              onBlur={() => setFocusedInput(null)}
+              onChangeText={(text) => {
+                setEmail(text);
+                setErrors((prev) => prev.filter((e) => e.field !== "email"));
+              }}
+              value={email}
+              placeholder="name@example.com"
+              placeholderTextColor="#8E8E93"
+              autoCapitalize="none"
+              keyboardType="email-address"
+              textContentType="emailAddress"
+              autoComplete="email"
+              returnKeyType="next"
+              onSubmitEditing={() => loginPasswordRef.current?.focus()}
+            />
 
-          <Pressable
-            style={({ pressed }) => [
-              styles.primaryButton,
-              pressed && { opacity: 0.85 },
-              loading && styles.disabledButton,
-            ]}
-            disabled={loading}
-            onPress={handleSubmit}
-          >
-            <Text style={styles.primaryButtonText}>
-              {loading ? "Checking..." : "Continue"}
-            </Text>
-          </Pressable>
-        </Animated.View>
+            <Text style={styles.fieldLabel}>PASSWORD</Text>
+            <TextInput
+              ref={loginPasswordRef}
+              style={[
+                styles.boxInput,
+                focusedInput === "password" && styles.inputFocus,
+              ]}
+              onFocus={() => setFocusedInput("password")}
+              onBlur={() => setFocusedInput(null)}
+              onChangeText={setPassword}
+              secureTextEntry
+              value={password}
+              placeholder="Your password"
+              placeholderTextColor="#8E8E93"
+              returnKeyType="done"
+              onSubmitEditing={handleSubmit}
+            />
 
-        {/* Step 2: Password */}
-        <Animated.View style={[styles.stepWrapper, getStepAnimatedStyle(2)]}>
-          <Text style={styles.fieldLabel}>PASSWORD</Text>
-          <TextInput
-            ref={passwordRef}
-            style={[
-              styles.boxInput,
-              focusedInput === "password" && styles.inputFocus,
-              passwordError && styles.inputError,
-            ]}
-            onFocus={() => setFocusedInput("password")}
-            onBlur={() => setFocusedInput(null)}
-            onChangeText={(text) => {
-              setPassword(text);
-              setErrors((prev) => prev.filter((e) => e.field !== "password"));
-            }}
-            secureTextEntry
-            value={password}
-            placeholder="At least 6 characters"
-            placeholderTextColor="#8E8E93"
-            returnKeyType="next"
-            onSubmitEditing={handleSubmit}
-          />
-          {passwordError && (
-            <Text style={styles.errorText}>{passwordError.msg}</Text>
-          )}
-
-          <Pressable
-            style={({ pressed }) => [
-              styles.primaryButton,
-              pressed && { opacity: 0.85 },
-              loading && styles.disabledButton,
-            ]}
-            disabled={loading}
-            onPress={handleSubmit}
-          >
-            <Text style={styles.primaryButtonText}>Continue</Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.backButtonContainer}
-            onPress={() => setSignupStep((step) => step - 1)}
-          >
-            <Text style={styles.backText}>Back</Text>
-          </Pressable>
-        </Animated.View>
-
-        {/* Step 3: Confirm Password */}
-        <Animated.View style={[styles.stepWrapper, getStepAnimatedStyle(3)]}>
-          <Text style={styles.fieldLabel}>CONFIRM PASSWORD</Text>
-          <TextInput
-            ref={confirmPasswordRef}
-            style={[
-              styles.boxInput,
-              focusedInput === "confirmPassword" && styles.inputFocus,
-              confirmPasswordError && styles.inputError,
-            ]}
-            onFocus={() => setFocusedInput("confirmPassword")}
-            onBlur={() => setFocusedInput(null)}
-            onChangeText={(text) => {
-              setConfirmPassword(text);
-              setErrors((prev) =>
-                prev.filter((e) => e.field !== "confirmPassword"),
-              );
-            }}
-            secureTextEntry
-            value={confirmPassword}
-            placeholder="Re-enter your password"
-            placeholderTextColor="#8E8E93"
-            returnKeyType="next"
-            onSubmitEditing={handleSubmit}
-          />
-          {confirmPasswordError && (
-            <Text style={styles.errorText}>{confirmPasswordError.msg}</Text>
-          )}
-
-          <Pressable
-            style={({ pressed }) => [
-              styles.primaryButton,
-              pressed && { opacity: 0.85 },
-              loading && styles.disabledButton,
-            ]}
-            disabled={loading}
-            onPress={handleSubmit}
-          >
-            <Text style={styles.primaryButtonText}>Continue</Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.backButtonContainer}
-            onPress={() => setSignupStep((step) => step - 1)}
-          >
-            <Text style={styles.backText}>Back</Text>
-          </Pressable>
-        </Animated.View>
-
-        {/* Step 4: Username */}
-        <Animated.View style={[styles.stepWrapper, getStepAnimatedStyle(4)]}>
-          <Text style={styles.fieldLabel}>USERNAME</Text>
-          <TextInput
-            ref={nameRef}
-            style={[
-              styles.boxInput,
-              focusedInput === "name" && styles.inputFocus,
-              nameError && styles.inputError,
-            ]}
-            onFocus={() => setFocusedInput("name")}
-            onBlur={() => setFocusedInput(null)}
-            onChangeText={(text) => {
-              setName(text);
-              setErrors((prev) => prev.filter((e) => e.field !== "name"));
-            }}
-            value={name}
-            placeholder="Your username"
-            placeholderTextColor="#8E8E93"
-            autoCapitalize="words"
-            textContentType="name"
-            autoComplete="name"
-            returnKeyType="next"
-            onSubmitEditing={handleSubmit}
-          />
-          {nameError && <Text style={styles.errorText}>{nameError.msg}</Text>}
-          <Pressable
-            style={({ pressed }) => [
-              styles.primaryButton,
-              pressed && { opacity: 0.85 },
-              loading && styles.disabledButton,
-            ]}
-            disabled={loading}
-            onPress={handleSubmit}
-          >
-            <Text style={styles.primaryButtonText}>
-              {loading ? "Checking..." : "Continue"}
-            </Text>
-          </Pressable>
-          <Pressable
-            style={styles.backButtonContainer}
-            onPress={() => setSignupStep((step) => step - 1)}
-          >
-            <Text style={styles.backText}>Back</Text>
-          </Pressable>
-        </Animated.View>
-
-        {/* Step 5: Avatar Import */}
-        <Animated.View style={[styles.stepWrapper, getStepAnimatedStyle(5)]}>
-          <Text style={styles.fieldLabel}>AVATAR (OPTIONAL)</Text>
-          <View style={styles.avatarPickerContainer}>
-            <TouchableOpacity
-              style={styles.avatarWrapper}
-              onPress={pickAvatar}
-              activeOpacity={0.85}
+            <Pressable
+              style={({ pressed }) => [
+                styles.primaryButton,
+                pressed && { opacity: 0.85 },
+                loading && styles.disabledButton,
+              ]}
+              disabled={loading}
+              onPress={handleSubmit}
             >
-              {avatarUri ? (
-                <ExpoImage
-                  source={{ uri: avatarUri }}
-                  style={styles.avatarImage}
-                  contentFit="cover"
-                />
-              ) : (
-                <View style={styles.avatarPlaceholder}>
-                  <User size={36} color="#8E8E93" />
-                </View>
-              )}
-              <View style={styles.cameraBadge}>
-                <Camera size={13} color="#FFFFFF" />
-              </View>
-            </TouchableOpacity>
-            <Text style={styles.changePhotoText}>Tap to change photo</Text>
-          </View>
+              <Text style={styles.primaryButtonText}>
+                {loading ? "Logging in..." : "Log In"}
+              </Text>
+            </Pressable>
 
-          <Pressable
-            style={({ pressed }) => [
-              styles.primaryButton,
-              pressed && { opacity: 0.85 },
-              loading && styles.disabledButton,
-            ]}
-            disabled={loading}
-            onPress={handleSubmit}
-          >
-            <Text style={styles.primaryButtonText}>
-              {loading ? "Completing..." : "Complete Sign Up"}
-            </Text>
-          </Pressable>
-          <Pressable
-            style={styles.backButtonContainer}
-            onPress={() => setSignupStep((step) => step - 1)}
-          >
-            <Text style={styles.backText}>Back</Text>
-          </Pressable>
-        </Animated.View>
+            {/* Toggle right under main button in login mode */}
+            <Pressable style={styles.toggleContainer} onPress={toggleAuthMode}>
+              <Text style={styles.toggleText}>
+                Don't have an account? Sign Up
+              </Text>
+            </Pressable>
+          </View>
+        ) : (
+          <>
+            {/* Step 1: Email */}
+            <Animated.View style={[styles.stepWrapper, styleStep1]}>
+              <Text style={styles.fieldLabel}>EMAIL</Text>
+              <TextInput
+                ref={emailRef}
+                style={[
+                  styles.boxInput,
+                  focusedInput === "email" && styles.inputFocus,
+                  emailError && styles.inputError,
+                ]}
+                onFocus={() => setFocusedInput("email")}
+                onBlur={() => setFocusedInput(null)}
+                onChangeText={(text) => {
+                  setEmail(text);
+                  setErrors((prev) => prev.filter((e) => e.field !== "email"));
+                }}
+                value={email}
+                placeholder="name@example.com"
+                placeholderTextColor="#8E8E93"
+                autoCapitalize="none"
+                keyboardType="email-address"
+                textContentType="emailAddress"
+                autoComplete="email"
+                returnKeyType="next"
+                onSubmitEditing={handleSubmit}
+              />
+              {emailError && (
+                <Text style={styles.errorText}>{emailError.msg}</Text>
+              )}
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.primaryButton,
+                  pressed && { opacity: 0.85 },
+                  loading && styles.disabledButton,
+                ]}
+                disabled={loading}
+                onPress={handleSubmit}
+              >
+                <Text style={styles.primaryButtonText}>
+                  {loading ? "Checking..." : "Continue"}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                style={styles.toggleContainer}
+                onPress={toggleAuthMode}
+              >
+                <Text style={styles.toggleText}>
+                  Already have an account? Log In
+                </Text>
+              </Pressable>
+            </Animated.View>
+
+            {/* Step 2: Password */}
+            <Animated.View style={[styles.stepWrapper, styleStep2]}>
+              <Text style={styles.fieldLabel}>PASSWORD</Text>
+              <TextInput
+                ref={passwordRef}
+                style={[
+                  styles.boxInput,
+                  focusedInput === "password" && styles.inputFocus,
+                  passwordError && styles.inputError,
+                ]}
+                onFocus={() => setFocusedInput("password")}
+                onBlur={() => setFocusedInput(null)}
+                onChangeText={(text) => {
+                  setPassword(text);
+                  setErrors((prev) =>
+                    prev.filter((e) => e.field !== "password"),
+                  );
+                }}
+                secureTextEntry
+                value={password}
+                placeholder="At least 6 characters"
+                placeholderTextColor="#8E8E93"
+                returnKeyType="next"
+                onSubmitEditing={handleSubmit}
+              />
+              {passwordError && (
+                <Text style={styles.errorText}>{passwordError.msg}</Text>
+              )}
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.primaryButton,
+                  pressed && { opacity: 0.85 },
+                  loading && styles.disabledButton,
+                ]}
+                disabled={loading}
+                onPress={handleSubmit}
+              >
+                <Text style={styles.primaryButtonText}>Continue</Text>
+              </Pressable>
+
+              <Pressable
+                style={styles.backButtonContainer}
+                onPress={() => setSignupStep((step) => step - 1)}
+              >
+                <Text style={styles.backText}>Back</Text>
+              </Pressable>
+            </Animated.View>
+
+            {/* Step 3: Confirm Password */}
+            <Animated.View style={[styles.stepWrapper, styleStep3]}>
+              <Text style={styles.fieldLabel}>CONFIRM PASSWORD</Text>
+              <TextInput
+                ref={confirmPasswordRef}
+                style={[
+                  styles.boxInput,
+                  focusedInput === "confirmPassword" && styles.inputFocus,
+                  confirmPasswordError && styles.inputError,
+                ]}
+                onFocus={() => setFocusedInput("confirmPassword")}
+                onBlur={() => setFocusedInput(null)}
+                onChangeText={(text) => {
+                  setConfirmPassword(text);
+                  setErrors((prev) =>
+                    prev.filter((e) => e.field !== "confirmPassword"),
+                  );
+                }}
+                secureTextEntry
+                value={confirmPassword}
+                placeholder="Re-enter your password"
+                placeholderTextColor="#8E8E93"
+                returnKeyType="next"
+                onSubmitEditing={handleSubmit}
+              />
+              {confirmPasswordError && (
+                <Text style={styles.errorText}>{confirmPasswordError.msg}</Text>
+              )}
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.primaryButton,
+                  pressed && { opacity: 0.85 },
+                  loading && styles.disabledButton,
+                ]}
+                disabled={loading}
+                onPress={handleSubmit}
+              >
+                <Text style={styles.primaryButtonText}>Continue</Text>
+              </Pressable>
+
+              <Pressable
+                style={styles.backButtonContainer}
+                onPress={() => setSignupStep((step) => step - 1)}
+              >
+                <Text style={styles.backText}>Back</Text>
+              </Pressable>
+            </Animated.View>
+
+            {/* Step 4: Username */}
+            <Animated.View style={[styles.stepWrapper, styleStep4]}>
+              <Text style={styles.fieldLabel}>USERNAME</Text>
+              <TextInput
+                ref={nameRef}
+                style={[
+                  styles.boxInput,
+                  focusedInput === "name" && styles.inputFocus,
+                  nameError && styles.inputError,
+                ]}
+                onFocus={() => setFocusedInput("name")}
+                onBlur={() => setFocusedInput(null)}
+                onChangeText={(text) => {
+                  setName(text);
+                  setErrors((prev) => prev.filter((e) => e.field !== "name"));
+                }}
+                value={name}
+                placeholder="Your username"
+                placeholderTextColor="#8E8E93"
+                autoCapitalize="words"
+                textContentType="name"
+                autoComplete="name"
+                returnKeyType="next"
+                onSubmitEditing={handleSubmit}
+              />
+              {nameError && (
+                <Text style={styles.errorText}>{nameError.msg}</Text>
+              )}
+              <Pressable
+                style={({ pressed }) => [
+                  styles.primaryButton,
+                  pressed && { opacity: 0.85 },
+                  loading && styles.disabledButton,
+                ]}
+                disabled={loading}
+                onPress={handleSubmit}
+              >
+                <Text style={styles.primaryButtonText}>
+                  {loading ? "Checking..." : "Continue"}
+                </Text>
+              </Pressable>
+              <Pressable
+                style={styles.backButtonContainer}
+                onPress={() => setSignupStep((step) => step - 1)}
+              >
+                <Text style={styles.backText}>Back</Text>
+              </Pressable>
+            </Animated.View>
+
+            {/* Step 5: Avatar Import */}
+            <Animated.View style={[styles.stepWrapper, styleStep5]}>
+              <Text style={styles.fieldLabel}>AVATAR (OPTIONAL)</Text>
+              <View style={styles.avatarPickerContainer}>
+                <TouchableOpacity
+                  style={styles.avatarWrapper}
+                  onPress={pickAvatar}
+                  activeOpacity={0.85}
+                >
+                  {avatarUri ? (
+                    <ExpoImage
+                      source={{ uri: avatarUri }}
+                      style={styles.avatarImage}
+                      contentFit="cover"
+                    />
+                  ) : (
+                    <View style={styles.avatarPlaceholder}>
+                      <User size={36} color="#8E8E93" />
+                    </View>
+                  )}
+                  <View style={styles.cameraBadge}>
+                    <Camera size={13} color="#FFFFFF" />
+                  </View>
+                </TouchableOpacity>
+                <Text style={styles.changePhotoText}>Tap to change photo</Text>
+              </View>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.primaryButton,
+                  pressed && { opacity: 0.85 },
+                  loading && styles.disabledButton,
+                ]}
+                disabled={loading}
+                onPress={handleSubmit}
+              >
+                <Text style={styles.primaryButtonText}>
+                  {loading ? "Completing..." : "Complete Sign Up"}
+                </Text>
+              </Pressable>
+              <Pressable
+                style={styles.backButtonContainer}
+                onPress={() => setSignupStep((step) => step - 1)}
+              >
+                <Text style={styles.backText}>Back</Text>
+              </Pressable>
+            </Animated.View>
+          </>
+        )}
       </View>
     </Pressable>
   );
@@ -614,7 +752,7 @@ const styles = StyleSheet.create({
   },
   formContainer: {
     width: "100%",
-    height: 300,
+    height: 350,
     position: "relative",
     overflow: "hidden",
   },
@@ -730,5 +868,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 12,
     marginLeft: 16,
+  },
+  toggleContainer: {
+    marginTop: 12,
+    alignSelf: "center",
+  },
+  toggleText: {
+    color: theme.colors.text.primary,
+    fontWeight: "600",
+    fontSize: 14,
+    textAlign: "center",
   },
 });
