@@ -1,6 +1,6 @@
 import { theme } from "@/constants/theme";
 import { useAuth } from "@/contexts/AuthContext";
-import { deleteRecipe, getRecipeById, viewRecipe } from "@/services/recipes";
+import { deleteRecipe, getRecipeById } from "@/services/recipes";
 import { Recipe } from "@/types/recipe";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Image } from "expo-image";
@@ -44,7 +44,7 @@ export default function RecipeDetailScreen() {
   });
 
   useEffect(() => {
-    viewRecipe(id);
+    // viewRecipe(id);
     queryClient.invalidateQueries({ queryKey: ["recipes"] });
   }, []);
 

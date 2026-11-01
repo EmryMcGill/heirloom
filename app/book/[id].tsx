@@ -1,6 +1,6 @@
 import { theme } from "@/constants/theme";
 import { useAuth } from "@/contexts/AuthContext";
-import { deleteBook, getBookWithRecipes, viewBook } from "@/services/books";
+import { deleteBook, getBookWithRecipes } from "@/services/books";
 import { Book } from "@/types/book";
 import { Recipe } from "@/types/recipe";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -13,7 +13,6 @@ import {
   MoreHorizontal,
   Utensils,
 } from "lucide-react-native";
-import { useEffect } from "react";
 import {
   ActionSheetIOS,
   ActivityIndicator,
@@ -51,11 +50,6 @@ export default function BookDetailScreen() {
   )?.role;
 
   const canManageBook = memberRole === "editor" || memberRole === "owner";
-
-  useEffect(() => {
-    viewBook(id);
-    queryClient.invalidateQueries({ queryKey: ["books"] });
-  }, []);
 
   const deleteBookMutation = useMutation({
     mutationFn: (bookId: string) => deleteBook(bookId),

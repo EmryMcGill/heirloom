@@ -94,6 +94,7 @@ export async function getRecipesByUserId(userId: string): Promise<Recipe[]> {
     .from("recipes")
     .select("*")
     .eq("author_id", userId)
+    .order("updated_at", { ascending: false })
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -147,7 +148,6 @@ export async function viewRecipe(bookId: string) {
     .from("recipes")
     .update({
       last_viewed_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
     })
     .eq("id", bookId)
     .select()
@@ -159,7 +159,19 @@ export async function viewRecipe(bookId: string) {
 }
 
 export async function getAccessibleRecipes(userId: string): Promise<Recipe[]> {
-  const { data, error } = await supabase.from("accessible_recipes").select("*");
+  if (!userId) {
+    throw new Error("A user ID is required to fetch accessible recipes.");
+  }
+
+  const { data, error } = await supabase
+    .from("accessible_recipes")
+    .select("*")
+    .order("updated_at", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw new Error(error.message);
+  }
 
   return data ?? [];
 }

@@ -16,6 +16,7 @@ export async function getUserBooks(userId: string): Promise<Book[]> {
     `,
     )
     .eq("user_id", userId)
+    .order("updated_at", { ascending: false })
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -29,34 +30,70 @@ export async function getUserBooks(userId: string): Promise<Book[]> {
 }
 
 export async function fetchUserBooks(userId: string): Promise<Book[]> {
-  const { data, error } = await supabase
-    .from("books")
-    .select(
-      `
-      *,
-      owner:profiles (id, full_name, avatar_url),
-      book_recipes (count),
-      book_members!inner (user_id, role)
-    `,
-    )
-    .eq("book_members.user_id", userId)
-    .order("created_at", { ascending: false });
+  const { data: memberships, error: membershipsError } = await supabase
+    .from("book_members")
+    .select("book_id, role")
+    .eq("user_id", userId);
 
-  if (error) {
-    throw new Error(error.message);
+  if (membershipsError) {
+    throw new Error(membershipsError.message);
   }
 
-  // Map to clean Book type and extract recipe_count & user_role
-  return (data || []).map((book: any) => {
-    const memberRole = book.book_members?.[0]?.role ?? "viewer";
-    const { book_members, book_recipes, ...bookData } = book;
+  const memberRoles = new Map(
+    (memberships ?? []).map(({ book_id, role }) => [book_id, role]),
+  );
+  const memberBookIds = [...memberRoles.keys()];
+  const bookSelection = `
+    *,
+    owner:profiles (id, full_name, avatar_url),
+    book_recipes (count)
+  `;
 
-    return {
-      ...bookData,
-      role: memberRole, // e.g. 'owner' | 'editor' | 'viewer'
-      recipe_count: book_recipes?.[0]?.count ?? 0,
-    };
-  });
+  const { data: ownedBooks, error: ownedBooksError } = await supabase
+    .from("books")
+    .select(bookSelection)
+    .eq("user_id", userId);
+
+  if (ownedBooksError) {
+    throw new Error(ownedBooksError.message);
+  }
+
+  const { data: memberBooks, error: memberBooksError } =
+    memberBookIds.length > 0
+      ? await supabase
+          .from("books")
+          .select(bookSelection)
+          .in("id", memberBookIds)
+      : { data: [], error: null };
+
+  if (memberBooksError) {
+    throw new Error(memberBooksError.message);
+  }
+
+  const booksById = new Map(
+    [...(ownedBooks ?? []), ...(memberBooks ?? [])].map((book) => [
+      book.id,
+      book,
+    ]),
+  );
+
+  return [...booksById.values()]
+    .map((book) => {
+      const { book_recipes, ...bookData } = book;
+      const role =
+        book.user_id === userId ? "owner" : memberRoles.get(book.id) ?? "viewer";
+
+      return {
+        ...bookData,
+        role,
+        recipe_count: book_recipes?.[0]?.count ?? 0,
+      };
+    })
+    .sort(
+      (a, b) =>
+        new Date(b.updated_at || b.created_at).getTime() -
+        new Date(a.updated_at || a.created_at).getTime(),
+    );
 }
 
 /**
@@ -370,7 +407,6 @@ export async function viewBook(bookId: string) {
     .from("books")
     .update({
       last_viewed_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
     })
     .eq("id", bookId)
     .select()

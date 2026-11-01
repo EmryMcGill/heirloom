@@ -117,6 +117,7 @@ export default function ManageBookRecipesModal() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["book-detail", bookId] });
       queryClient.invalidateQueries({ queryKey: ["books"] });
+      queryClient.invalidateQueries({ queryKey: ["accessible-recipes"] });
       router.back();
     },
     onError: (err: Error) => {

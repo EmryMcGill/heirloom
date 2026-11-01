@@ -49,6 +49,14 @@ type BookMember = {
   role: string;
 };
 
+type DisplayMember = {
+  id: string;
+  full_name: string | null;
+  username: string | null;
+  avatar_url: string | null;
+  role: "owner" | "editor" | "viewer";
+};
+
 export default function NewBookScreen() {
   const { session, profile } = useAuth();
   const userId = session?.user?.id;
@@ -114,6 +122,8 @@ export default function NewBookScreen() {
     enabled: isEditing,
   });
 
+  const isOwner = !isEditing || (book ? book.user_id === userId : true);
+
   // Form state
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -129,23 +139,68 @@ export default function NewBookScreen() {
     setDescription(book.description ?? "");
     setExistingImageUrl(book.cover_image_url ?? null);
 
+    // Filter out the book owner from the editable/added members list if present
     const loadedMembers =
       book.book_members
-        ?.filter((member) => member.user_id !== userId)
+        ?.filter((member) => member.user_id !== book.user_id)
         .map((member) => ({
           id: member.user_id,
-          full_name: member.profiles.full_name,
-          username: member.profiles.username,
-          avatar_url: member.profiles.avatar_url,
+          full_name: member.profiles?.full_name ?? null,
+          username: member.profiles?.username ?? null,
+          avatar_url: member.profiles?.avatar_url ?? null,
           role: member.role,
         })) ?? [];
 
-    if (loadedMembers.length > 0) {
+    if (loadedMembers.length > 0 || book.user_id !== userId) {
       setIsPrivate(false);
     }
 
     setMembers(loadedMembers);
   }, [book, userId]);
+
+  // Compute display members list from book members / local state with the owner at the top
+  const displayMembers: DisplayMember[] = [];
+
+  if (book?.book_members) {
+    book.book_members.forEach((member) => {
+      displayMembers.push({
+        id: member.user_id,
+        full_name: member.profiles?.full_name ?? "Owner",
+        username: member.profiles?.username ?? null,
+        avatar_url: member.profiles?.avatar_url ?? null,
+        role: member.role as "owner" | "editor" | "viewer",
+      });
+    });
+  } else if (profile && userId) {
+    // Creating a new book defaults current user as owner
+    displayMembers.push({
+      id: userId,
+      full_name: profile.full_name,
+      username: profile.username,
+      avatar_url: profile.avatar_url,
+      role: "owner",
+    });
+  }
+
+  // Add remaining local members
+  members.forEach((m) => {
+    if (!displayMembers.some((dm) => dm.id === m.id)) {
+      displayMembers.push({
+        id: m.id,
+        full_name: m.full_name,
+        username: m.username,
+        avatar_url: m.avatar_url,
+        role: m.role as "editor" | "viewer",
+      });
+    }
+  });
+
+  // Ensure owner stays pinned at the top
+  displayMembers.sort((a, b) => {
+    if (a.role === "owner") return -1;
+    if (b.role === "owner") return 1;
+    return 0;
+  });
 
   // Image Picker Logic
   const openPhotoSelector = async () => {
@@ -241,7 +296,11 @@ export default function NewBookScreen() {
   };
 
   const handleAddPeople = () => {
-    router.push("/add-book-member-modal");
+    const existingIds = displayMembers.map((m) => m.id).join(",");
+    router.push({
+      pathname: "/add-book-member-modal",
+      params: { existingIds },
+    });
   };
 
   if (isEditing && isFetchingBook) {
@@ -371,8 +430,18 @@ export default function NewBookScreen() {
                 style={[
                   styles.sharingCard,
                   isPrivate && styles.sharingCardSelected,
+                  !isOwner && { opacity: 0.5 },
                 ]}
-                onPress={() => setIsPrivate(true)}
+                onPress={() => {
+                  if (!isOwner) {
+                    Alert.alert(
+                      "Permission Denied",
+                      "Only the owner of the book can change it to private.",
+                    );
+                    return;
+                  }
+                  setIsPrivate(true);
+                }}
               >
                 <Lock size={18} color={isPrivate ? "#000" : "#777"} />
                 <Text
@@ -412,58 +481,42 @@ export default function NewBookScreen() {
               </View>
 
               <View style={styles.membersCard}>
-                <View style={styles.memberRow}>
-                  {profile?.avatar_url ? (
-                    <Image
-                      source={{ uri: profile.avatar_url }}
-                      style={styles.memberAvatar}
-                    />
-                  ) : (
-                    <View style={styles.memberAvatarPlaceholder}>
-                      <Text style={styles.memberAvatarText}>
-                        {profile?.full_name?.charAt(0).toUpperCase() ?? "?"}
-                      </Text>
-                    </View>
-                  )}
+                {displayMembers.map((member) => {
+                  const isMe = member.id === userId;
+                  return (
+                    <View key={member.id} style={styles.memberRow}>
+                      {member.avatar_url ? (
+                        <Image
+                          source={{ uri: member.avatar_url }}
+                          style={styles.memberAvatar}
+                        />
+                      ) : (
+                        <View style={styles.memberAvatarPlaceholder}>
+                          <Text style={styles.memberAvatarText}>
+                            {member.full_name?.charAt(0).toUpperCase() ?? "?"}
+                          </Text>
+                        </View>
+                      )}
 
-                  <View style={styles.memberInfo}>
-                    <Text style={styles.memberName}>{profile?.full_name}</Text>
-                    <Text style={styles.memberUsername}>You</Text>
-                  </View>
+                      <View style={styles.memberInfo}>
+                        <Text style={styles.memberName} numberOfLines={1}>
+                          {member.full_name} {isMe ? "(You)" : ""}
+                        </Text>
+                        {isMe && <Text style={styles.memberUsername}>You</Text>}
+                      </View>
 
-                  <View style={styles.roleBadge}>
-                    <Text style={styles.roleText}>Owner</Text>
-                  </View>
-                </View>
-
-                {members.map((member) => (
-                  <View key={member.id} style={styles.memberRow}>
-                    {member.avatar_url ? (
-                      <Image
-                        source={{ uri: member.avatar_url }}
-                        style={styles.memberAvatar}
-                      />
-                    ) : (
-                      <View style={styles.memberAvatarPlaceholder}>
-                        <Text style={styles.memberAvatarText}>
-                          {member.full_name?.charAt(0).toUpperCase() ?? "?"}
+                      <View style={styles.roleBadge}>
+                        <Text style={styles.roleText}>
+                          {member.role === "owner"
+                            ? "Owner"
+                            : member.role === "editor"
+                              ? "Editor"
+                              : "Viewer"}
                         </Text>
                       </View>
-                    )}
-
-                    <View style={styles.memberInfo}>
-                      <Text style={styles.memberName} numberOfLines={1}>
-                        {member.full_name}
-                      </Text>
                     </View>
-
-                    <View style={styles.roleBadge}>
-                      <Text style={styles.roleText}>
-                        {member.role === "editor" ? "Editor" : "Viewer"}
-                      </Text>
-                    </View>
-                  </View>
-                ))}
+                  );
+                })}
 
                 {/* Add people */}
                 <TouchableOpacity
@@ -605,7 +658,6 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 8,
   },
-
   sharingCard: {
     flex: 1,
     height: 52,
@@ -613,25 +665,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-
     backgroundColor: "#F5F5F5",
     borderWidth: 1,
     borderColor: "#E5E5E5",
     borderRadius: 12,
   },
-
   sharingCardSelected: {
     backgroundColor: "#FFFFFF",
     borderColor: "#111111",
     borderWidth: 1.5,
   },
-
   sharingText: {
     fontSize: 15,
     fontWeight: "500",
     color: "#777",
   },
-
   sharingTextSelected: {
     color: "#111",
     fontWeight: "600",
@@ -639,19 +687,16 @@ const styles = StyleSheet.create({
   accessSection: {
     marginTop: 18,
   },
-
   accessHeader: {
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 8,
   },
-
   membersCard: {
     backgroundColor: "rgba(0,0,0,0.05)",
     borderRadius: 12,
     overflow: "hidden",
   },
-
   memberRow: {
     minHeight: 68,
     flexDirection: "row",
@@ -661,13 +706,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "rgba(0,0,0,0.4)",
   },
-
   memberAvatar: {
     width: 40,
     height: 40,
     borderRadius: 20,
   },
-
   memberAvatarPlaceholder: {
     width: 40,
     height: 40,
@@ -676,51 +719,43 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-
   memberAvatarText: {
     fontSize: 15,
     fontWeight: "600",
     color: "#666",
   },
-
   memberInfo: {
     flex: 1,
     marginLeft: 11,
     marginRight: 8,
   },
-
   memberName: {
     fontSize: 15,
     fontWeight: "600",
     color: "#111",
   },
-
   memberUsername: {
     marginTop: 2,
     fontSize: 12,
     color: "#8E8E93",
   },
-
   roleBadge: {
     paddingHorizontal: 9,
     paddingVertical: 5,
     borderRadius: 7,
     backgroundColor: "#FFFFFF",
   },
-
   roleText: {
     fontSize: 11,
     fontWeight: "600",
     color: "#666",
   },
-
   addPeopleButton: {
     height: 52,
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 12,
   },
-
   addPeopleIcon: {
     width: 32,
     height: 32,
@@ -729,7 +764,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "#FFFFFF",
   },
-
   addPeopleText: {
     marginLeft: 10,
     fontSize: 14,

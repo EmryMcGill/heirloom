@@ -54,6 +54,7 @@ export default function AddToBookModal() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["recipe-books", recipeId] });
       queryClient.invalidateQueries({ queryKey: ["books"] });
+      queryClient.invalidateQueries({ queryKey: ["accessible-recipes"] });
       router.back();
     },
   });

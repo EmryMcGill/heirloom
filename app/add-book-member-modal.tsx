@@ -3,7 +3,7 @@ import { searchUsers } from "@/services/users";
 import { useQuery } from "@tanstack/react-query";
 import { BlurView } from "expo-blur";
 import { Image } from "expo-image";
-import { Stack, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { Check, Search, X } from "lucide-react-native";
 import { useMemo, useState } from "react";
 import {
@@ -30,6 +30,13 @@ export default function AddBookMemberModal() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
+  // Accept comma-separated existing member IDs from route parameters if needed
+  const { existingIds } = useLocalSearchParams<{ existingIds?: string }>();
+  const existingMemberIds = useMemo(() => {
+    if (!existingIds) return new Set<string>();
+    return new Set(existingIds.split(",").filter(Boolean));
+  }, [existingIds]);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [role, setRole] = useState<"viewer" | "editor">("viewer");
@@ -47,11 +54,12 @@ export default function AddBookMemberModal() {
     });
   };
 
+  // Filter out users who are already members of the book
   const filteredUsers = useMemo(() => {
     if (!searchQuery.trim()) return [];
 
-    return users;
-  }, [users, searchQuery]);
+    return users.filter((user) => !existingMemberIds.has(user.id));
+  }, [users, searchQuery, existingMemberIds]);
 
   const handleSelectUser = (user: User) => {
     setSelectedUser(user);

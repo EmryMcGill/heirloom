@@ -49,8 +49,8 @@ export default function LibraryScreen() {
     )
     .sort(
       (a, b) =>
-        new Date(b.last_viewed_at).getTime() -
-        new Date(a.last_viewed_at).getTime(),
+        new Date(b.updated_at || b.created_at).getTime() -
+        new Date(a.updated_at || a.created_at).getTime(),
     );
 
   const filteredBooks = books
@@ -59,8 +59,8 @@ export default function LibraryScreen() {
     )
     .sort(
       (a, b) =>
-        new Date(b.last_viewed_at).getTime() -
-        new Date(a.last_viewed_at).getTime(),
+        new Date(b.updated_at || b.created_at).getTime() -
+        new Date(a.updated_at || a.created_at).getTime(),
     );
 
   // Helper to chunk books into 2-column rows for grid rendering
@@ -241,7 +241,7 @@ export default function LibraryScreen() {
               >
                 {searchQuery
                   ? "No matching recipes found."
-                  : "No recipes created yet."}
+                  : "No recipes available yet."}
               </Text>
             ) : (
               filteredRecipes.map((item) => (

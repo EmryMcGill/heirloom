@@ -1,5 +1,5 @@
 import { useAuth } from "@/contexts/AuthContext";
-import { getRecipesByUserId, saveRecipe } from "@/services/recipes";
+import { getAccessibleRecipes, saveRecipe } from "@/services/recipes";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 export function useCreateRecipe() {
@@ -13,8 +13,9 @@ export function useCreateRecipe() {
       return saveRecipe(input, userId);
     },
     onSuccess: () => {
-      // Invalidate and refetch all queries matching the 'recipes' key
+      // Refresh both owned-recipe and accessible-recipe lists.
       queryClient.invalidateQueries({ queryKey: ["recipes"] });
+      queryClient.invalidateQueries({ queryKey: ["accessible-recipes"] });
     },
   });
 }
@@ -24,8 +25,8 @@ export function useRecipes() {
   const userId = session?.user?.id;
 
   return useQuery({
-    queryKey: ["recipes", userId],
-    queryFn: () => getRecipesByUserId(userId!),
+    queryKey: ["accessible-recipes", userId],
+    queryFn: () => getAccessibleRecipes(userId!),
     enabled: !!userId,
     staleTime: 1000 * 60 * 5, // 5 minutes cache
   });

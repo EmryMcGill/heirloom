@@ -88,7 +88,7 @@ export default function ProfileScreen() {
             activeOpacity={0.85}
             onPress={() =>
               router.push({
-                pathname: "/(tabs)/library",
+                pathname: "/(tabs)",
                 params: { tab: "books" },
               })
             }
@@ -109,7 +109,7 @@ export default function ProfileScreen() {
             activeOpacity={0.85}
             onPress={() =>
               router.push({
-                pathname: "/(tabs)/library",
+                pathname: "/(tabs)",
                 params: { tab: "recipes" },
               })
             }

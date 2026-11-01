@@ -2,9 +2,9 @@ in progress:
 
 todo:
 
-auth flow
-
-- avatar section styles + skip button
+- show all recipes on all recipes section, sort by created date
+- add focus to inputs
+- ability to remove / change people from book
 
 - google sign up ??
 - onboarding screens
